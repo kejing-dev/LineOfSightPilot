@@ -141,7 +141,9 @@ internal class CourseView(private val root: Entity, private val kit: CourseKit) 
     suspend fun build() {
         pad = Entity().named("pad").also { root.addChild(it) }
         model(kit.padRing, kit.padOrange, "padRing", pad).setLocal(position = Vec3(0f, 0.004f, 0f), rotation = flat())
+        kotlinx.coroutines.delay(16)
         model(kit.disc, kit.padWhite, "padFace", pad).setLocal(position = Vec3(0f, 0.003f, 0f), rotation = flat(), scale = Vec3(0.84f, 0.84f, 1f))
+        kotlinx.coroutines.delay(16)
         // the H: two uprights and a bar, one mesh (no text texture)
         val h = withContext(Dispatchers.IO) {
             MeshBuilder(72).apply {
@@ -152,14 +154,16 @@ internal class CourseView(private val root: Entity, private val kit: CourseKit) 
             }.build("padH")
         }
         model(h, kit.padInk, "padH", pad)
+        kotlinx.coroutines.delay(16)
         padLenient = model(kit.ring, kit.frame, "padLenient", pad).also { it.setLocal(position = Vec3(0f, 0.002f, 0f), rotation = flat(), scale = Vec3(1.4f, 1.4f, 1f)) }
         kotlinx.coroutines.delay(16)
         box = Entity().named("hoverBox").also { root.addChild(it) }
         boxEdges = Merged(box, "boxEdges")
-        repeat(12) { boxProgress += bar(box, "boxProg$it", kit.greenSolid).also { b -> b.e.enabled = false }; if (it % 4 == 3) kotlinx.coroutines.delay(16) }
+        repeat(12) { boxProgress += bar(box, "boxProg$it", kit.greenSolid).also { b -> b.e.enabled = false }; kotlinx.coroutines.delay(16) }
         kotlinx.coroutines.delay(16)
         spin = Entity().named("spinRing").also { root.addChild(it) }
         model(kit.spinRing, kit.frame, "spinRingLine", spin).setLocal(position = Vec3(0f, 0.004f, 0f), rotation = flat(), scale = Vec3(1.2f, 1.2f, 1f))
+        kotlinx.coroutines.delay(16)
         val ticks = withContext(Dispatchers.IO) {
             MeshBuilder(12 * 24).apply {
                 for (i in 0 until 12) {
@@ -170,9 +174,11 @@ internal class CourseView(private val root: Entity, private val kit: CourseKit) 
             }.build("spinTicks")
         }
         model(ticks, kit.white, "spinTicks", spin)
+        kotlinx.coroutines.delay(16)
         for (i in 0 until 12) {
             val a1 = 2 * PI * (i + 0.08) / 12
             val a2 = 2 * PI * (i + 0.92) / 12
+            kotlinx.coroutines.delay(16)
             spinArcs += bar(spin, "spinArc$i", kit.greenSolid).also { b ->
                 b.span(Vec3((0.6 * sin(a1)).toFloat(), 0.007f, (-0.6 * cos(a1)).toFloat()), Vec3((0.6 * sin(a2)).toFloat(), 0.007f, (-0.6 * cos(a2)).toFloat()), 0.035f)
                 b.e.enabled = false
@@ -184,6 +190,7 @@ internal class CourseView(private val root: Entity, private val kit: CourseKit) 
             val a = PI / 2 * i
             val p = Vec3((0.78 * sin(a)).toFloat(), 0.12f, (-0.78 * cos(a)).toFloat())
             spinLabels += model(kit.label, m, "spinLabel$deg", spin).also { it.setLocal(position = p, scale = Vec3(0.6f, 0.6f, 1f)) }
+            kotlinx.coroutines.delay(16)
         }
         kotlinx.coroutines.delay(16)
         poles = Entity().named("poles").also { root.addChild(it) }
@@ -194,6 +201,7 @@ internal class CourseView(private val root: Entity, private val kit: CourseKit) 
             gates += Merged(eight, "gate${g + 1}")
             val m = kit.labelMats["gate${g + 1}"]
             if (m != null) gateTags += model(kit.label, m, "gateTag${g + 1}", eight)
+            kotlinx.coroutines.delay(16)
         }
         pathDashes = Merged(eight, "pathDashes")
         pathArrows = Merged(eight, "pathArrows")
@@ -201,18 +209,22 @@ internal class CourseView(private val root: Entity, private val kit: CourseKit) 
         rings = Entity().named("rings").also { root.addChild(it) }
         repeat(6) { i ->
             ringEnts += model(kit.wpRing, kit.frame, "ring$i", rings).also { it.enabled = false }
+            kotlinx.coroutines.delay(16)
             ringLines += bar(rings, "ringLine$i", kit.bound).also { it.e.enabled = false }
+            kotlinx.coroutines.delay(16)
         }
         bounds = Entity().named("bounds").also { root.addChild(it) }
         repeat(4) { f -> faces += Merged(bounds, "bound$f") }
         kotlinx.coroutines.delay(16)
         sock = Entity().named("windSock").also { root.addChild(it) }
         model(kit.cyl, kit.padWhite, "sockPole", sock).setLocal(position = Vec3(0f, 0.6f, 0f), scale = Vec3(0.025f, 1.2f, 0.025f))
+        kotlinx.coroutines.delay(16)
         sockBag = Entity().named("sockBag").also { sock.addChild(it) }
         sockBag.setLocal(position = Vec3(0f, 1.15f, 0f))
         for (i in 0 until 4) {
             val k = 1f - i * 0.18f
             model(kit.cyl, if (i % 2 == 0) kit.padOrange else kit.padWhite, "sock$i", sockBag).setLocal(position = Vec3(0f, 0f, -(0.05f + i * 0.1f)), rotation = Quat4.axisAngle(Vec3.RIGHT, (PI / 2).toFloat()), scale = Vec3(0.14f * k, 0.1f, 0.14f * k))
+            kotlinx.coroutines.delay(16)
         }
     }
 
@@ -252,7 +264,7 @@ internal class CourseView(private val root: Entity, private val kit: CourseKit) 
         for ((k, mesh) in fresh.withIndex()) {
             if (mesh != null) {
                 slots[k].set(mesh, mats[k])
-                if (k % 3 == 2) kotlinx.coroutines.delay(16)
+                kotlinx.coroutines.delay(16)
             }
         }
         // progress segments along the bottom edge nearest to you (+Z)

@@ -44,9 +44,12 @@ internal class DroneView(private val courseRoot: Entity, private val kit: Course
     suspend fun prepare() {
         for (i in 0 until DASHES) {
             dashes += Bar(model(kit.cube, kit.frame, "hdash$i", courseRoot)).also { b -> b.e.enabled = false }
-            if (i % 5 == 4) kotlinx.coroutines.delay(16)
+            kotlinx.coroutines.delay(16)
         }
-        for (i in 0 until 5) ticks += Bar(model(kit.cube, kit.white, "htick$i", courseRoot)).also { b -> b.e.enabled = false }
+        for (i in 0 until 5) {
+            ticks += Bar(model(kit.cube, kit.white, "htick$i", courseRoot)).also { b -> b.e.enabled = false }
+            kotlinx.coroutines.delay(16)
+        }
     }
     // direction hints: "right stick ->" and "right stick ^" in the world (shaft + two head bars + label each)
     private val hintRight = List(3) { Bar(model(kit.cube, kit.yellowSolid, "hintR$it", floor)) }
@@ -69,9 +72,10 @@ internal class DroneView(private val courseRoot: Entity, private val kit: Course
     }
 
     /** Attaches the loaded GLB and calibrates it from its measured box (D25). Returns a log line. */
-    fun attach(e: Entity): String {
+    suspend fun attach(e: Entity): String {
         calib.addChild(e.named("droneModel"))
         model = e
+        kotlinx.coroutines.delay(16)
         val box = runCatching { e.getVisualBounds(calib) }.getOrNull()
         val c = box?.center?.let { Vec3(it.x, it.y, it.z) } ?: Vec3(0f, 0.095f, 0f)
         val h = box?.halfExtent?.let { Vec3(it.x, it.y, it.z) } ?: Vec3(0.345f, 0.095f, 0.345f)
@@ -80,6 +84,7 @@ internal class DroneView(private val courseRoot: Entity, private val kit: Course
         val front = runCatching { e.findEntity("ledF")?.getVisualBounds(calib)?.center }.getOrNull()
         val back = runCatching { e.findEntity("ledR")?.getVisualBounds(calib)?.center }.getOrNull()
         val nose = if (front != null && back != null) Vec3(front.x - back.x, 0f, front.z - back.z).normalized() else DroneCalibration.droneForward
+        kotlinx.coroutines.delay(16)
         val cal = DroneCalibration.of(c, h, nose)
         calibration = cal
         calib.setLocal(position = cal.rotation.rotate(cal.offset * cal.scale), rotation = cal.rotation, scale = Vec3(cal.scale, cal.scale, cal.scale))
@@ -92,6 +97,7 @@ internal class DroneView(private val courseRoot: Entity, private val kit: Course
                 d.setLocal(position = Vec3(sx * m, 0.176f, sz * m), rotation = CourseView.flat(), scale = Vec3(DroneCalibration.PROP_D_M, DroneCalibration.PROP_D_M, 1f))
                 d.enabled = false
             }
+            kotlinx.coroutines.delay(16)
         }
         val after = runCatching { e.getVisualBounds(root) }.getOrNull()
         val line = String.format(

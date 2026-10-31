@@ -106,6 +106,9 @@ flight sensors (factory rule 2026-10-29: no shortcut state writes). The emulator
 | `state S01..S15 | S06A` | macro of the above to reach a design state |
 | `where` `panels` `instances` `bounds PANEL` `dump` `ftest on|off` | diagnostics; `ftest` puts F↑ on the gate-1 tag ×3 (D10) |
 
+Virtual pads end to end: `tools/pad_lesson.sh [OUTDIR]` (L1 with the pads only: take off by holding the left pad up
+1 s (`PAD_TAKEOFF=0` uses the 起飞 key), climb into the box, 20 s GPS hold, sink onto the pad -> `RESULT … PASS`).
+
 ## Screenshot list (QA, design states)
 
 | state | how |
