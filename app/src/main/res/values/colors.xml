@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- pale sky (design appIcon "天空蓝" #2B7FD9 was too close to feel-number #2D8CE0 / furniture-fit #3D8BFF): -->
+    <!-- not the main colour of any other factory app icon -->
+    <color name="ic_launcher_background">#FF9AD3F5</color>
+</resources>

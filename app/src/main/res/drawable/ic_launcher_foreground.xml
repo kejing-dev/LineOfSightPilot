@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Drone Sight launcher glyph (design appIcon / D2 / D23): Material Symbols "drone" (filled) in dark slate #1E2A33 over
+     an orange "circle" landing pad #FF7A1A, both Material Symbols Outlined (Apache-2.0, google/material-design-icons),
+     on pale sky #9AD3F5. 108-unit adaptive canvas, glyphs inside the 66-unit safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateX="34.8" android:translateY="70.2" android:scaleX="0.04" android:scaleY="0.012">
+        <path android:fillColor="#FFFF7A1A" android:pathData="M480,880Q397,880 324,848.5Q251,817 197,763Q143,709 111.5,636Q80,563 80,480Q80,397 111.5,324Q143,251 197,197Q251,143 324,111.5Q397,80 480,80Q563,80 636,111.5Q709,143 763,197Q817,251 848.5,324Q880,397 880,480Q880,563 848.5,636Q817,709 763,763Q709,817 636,848.5Q563,880 480,880Z" />
+    </group>
+    <group android:translateX="30" android:translateY="20" android:scaleX="0.05" android:scaleY="0.05">
+        <path android:fillColor="#FF1E2A33" android:pathData="M160,800Q160,725 201,665.5Q242,606 307,579L297,480L160,480L160,240L40,240L40,160L360,160L360,240L240,240L240,400L288,400L280,320L680,320L672,400L720,400L720,240L600,240L600,160L921,160L921,240L801,240L801,480L664,480L654,579Q719,606 759.5,665.5Q800,725 800,800L720,800Q720,734 673,687Q626,640 560,640L400,640Q334,640 287,687Q240,734 240,800L160,800Z" />
+    </group>
+</vector>
