@@ -13,4 +13,4 @@
 | `5cd4b613` | 子代理 · Spatial app factory | 1346 |
 | `5cd4b613` | 子代理 · Spatial app factory | 1074 |
 | `5cd4b613` | 子代理 · Spatial app factory | 1231 |
-| `5cd4b613` | 子代理 · Spatial app factory | 512 |
+| `5cd4b613` | 子代理 · Spatial app factory | 530 |
