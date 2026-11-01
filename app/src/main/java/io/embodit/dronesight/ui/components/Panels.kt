@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,7 +35,10 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -82,6 +86,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 private val GlassShape = RoundedCornerShape(24.dp)
+private const val PILL_PAD = 12
 
 /** Glass panel root, drawn from the top edge down to [h] (the rest of the declared panel stays empty). */
 @Composable
@@ -95,9 +100,9 @@ private fun Glass(w: Float, h: Float, padding: Int = 16, content: @Composable ()
 
 /** A small status pill: opaque dark slate with light text (13:1), readable on any glass / room behind it. */
 @Composable
-private fun Pill(text: String, bg: Color = DsColors.TagBg, ink: Color = DsColors.TagInk, name: String = "pill") {
-    Box(Modifier.clip(RoundedCornerShape(14.dp)).background(bg).padding(horizontal = 12.dp, vertical = 4.dp).probe(name), contentAlignment = Alignment.Center) {
-        Text(text = text, style = DsType.label, color = ink, maxLines = 1)
+private fun Pill(text: String, bg: Color = DsColors.TagBg, ink: Color = DsColors.TagInk, name: String = "pill", modifier: Modifier = Modifier) {
+    Box(modifier.clip(RoundedCornerShape(14.dp)).background(bg).padding(horizontal = PILL_PAD.dp, vertical = 4.dp).probe(name), contentAlignment = Alignment.Center) {
+        Text(text = text, style = DsType.label, color = ink, maxLines = 1, onTextLayout = fits("pill/$name"))
     }
 }
 
@@ -111,11 +116,19 @@ enum class KeyKind { PRIMARY, DANGER, NORMAL, ON }
 private fun Key(text: String, name: String, icon: Int? = null, kind: KeyKind = KeyKind.NORMAL, height: Dp = 48.dp, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val container = when (kind) {
         KeyKind.PRIMARY -> DsColors.Interaction
-        KeyKind.DANGER -> DsColors.Error
+        KeyKind.DANGER -> DsColors.DangerFill
         KeyKind.ON -> DsColors.Passable
         KeyKind.NORMAL -> PicoTheme.colorScheme.fillTertiary
     }
-    val ink = if (kind == KeyKind.NORMAL) PicoTheme.colorScheme.labelPrimary else DsColors.OnFill
+    val ink = when (kind) {
+        KeyKind.NORMAL -> PicoTheme.colorScheme.labelPrimary
+        KeyKind.DANGER -> DsColors.OnError
+        else -> DsColors.OnFill
+    }
+    // danger keys: bold strokes as well as the darker ink, so the label stays >= 4.5:1 even where it renders thin
+    // (20 sp bold on the lighter DangerFill: at 16 sp the strokes are 1-2 px in a 2160-px capture and anti-aliasing pulled
+    // them to ~4.2:1 on the old red)
+    val style = if (kind == KeyKind.DANGER) DsType.button.copy(fontSize = 20.sp, lineHeight = 24.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) else DsType.button
     Button(
         onClick = onClick,
         modifier = modifier.probe(name).height(height),
@@ -127,7 +140,7 @@ private fun Key(text: String, name: String, icon: Int? = null, kind: KeyKind = K
             Icon(painter = painterResource(icon), contentDescription = null, modifier = Modifier.size(22.dp), tint = ink)
             Spacer(Modifier.width(8.dp))
         }
-        Text(text = text, maxLines = 1, color = ink, style = DsType.button, overflow = TextOverflow.Ellipsis)
+        Text(text = text, maxLines = 1, color = ink, style = style, overflow = TextOverflow.Ellipsis, onTextLayout = fits("key/$name"))
     }
 }
 
@@ -135,7 +148,7 @@ private fun Key(text: String, name: String, icon: Int? = null, kind: KeyKind = K
 @Composable
 private fun IdleKey(text: String, name: String, modifier: Modifier = Modifier, height: Dp = 56.dp) {
     Box(modifier.height(height).clip(CircleShape).background(DsColors.TagBg).probe(name), contentAlignment = Alignment.Center) {
-        Text(text = text, maxLines = 1, color = DsColors.TagInk, style = DsType.button)
+        Text(text = text, maxLines = 1, color = DsColors.TagInk, style = DsType.button, onTextLayout = fits("key/$name"))
     }
 }
 
@@ -161,19 +174,34 @@ private fun segColors() =
         selectedItemContentColor = DsColors.OnFill,
     )
 
-/** Segments at the Regular size (48 dp, items 40 = 48 - 2 x 4, theremin lesson); the selected item is interaction yellow + ink. */
+/**
+ * Segments at the Regular size (48 dp, items 40 = 48 - 2 x 4, theremin lesson); the selected item is interaction yellow
+ * + ink. [itemWidth] is the minimum: an item whose label needs more (zh「只在前两课」, v0.1.1 OVERFLOW seg/set_hints) grows
+ * to the widest label + 26 dp (all items equal: the control shares its width equally), so no label is cut.
+ */
 @Composable
 private fun <T> Segments(options: List<Pair<T, String>>, selected: T, name: String, itemWidth: Int, enabled: Boolean = true, onPick: (T) -> Unit) {
-    SegmentControl(modifier = Modifier.width((itemWidth * options.size + 8).dp).height(48.dp), backgroundColor = PicoTheme.colorScheme.fillTertiary) {
-        options.forEach { (v, label) ->
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val style = DsType.label
+    val widths =
+        remember(options.map { it.second }, itemWidth, style, density) {
+            // SegmentControl shares its width equally between the items (BOUNDS: three 80-dp items for 76 / 76 / 98), and an
+            // item keeps ~12 dp padding a side: every item takes the widest label (+10 %: the item's own text measures a
+            // little wider than the measurer, OVERFLOW 只在前两课 at exactly label + 26) + 26 dp
+            val w = options.maxOf { (_, label) -> maxOf(itemWidth.dp, with(density) { (measurer.measure(label, style, maxLines = 1).size.width * 1.1f).toDp() } + 26.dp) }
+            options.map { w }
+        }
+    SegmentControl(modifier = Modifier.width(widths.fold(8.dp) { a, b -> a + b }).height(48.dp), backgroundColor = PicoTheme.colorScheme.fillTertiary) {
+        options.forEachIndexed { i, (v, label) ->
             val sel = v == selected
             SegmentItem(
                 selected = sel,
                 onClick = { if (enabled) onPick(v) },
-                modifier = Modifier.width(itemWidth.dp).height(40.dp).probe("${name}_$v"),
+                modifier = Modifier.width(widths[i]).height(40.dp).probe("${name}_$v"),
                 textStyle = DsType.label,
                 colors = segColors(),
-                title = { Text(text = label, maxLines = 1, color = if (sel) DsColors.OnFill else PicoTheme.colorScheme.labelPrimary, style = DsType.label) },
+                title = { Text(text = label, maxLines = 1, color = if (sel) DsColors.OnFill else PicoTheme.colorScheme.labelPrimary, style = DsType.label, onTextLayout = fits("seg/${name}_$v")) },
             )
         }
     }
@@ -277,18 +305,53 @@ internal fun ControlPanel(state: DsUiState?, onEvent: (Ui) -> Unit) {
     }
 }
 
+/**
+ * Page title row: title, an optional chip, the trailing control and settings. The title takes what is left and fits
+ * itself (20 sp on one line, else 16 sp on two, else 14 sp on two: the 48-dp row holds two lines), never an ellipsis;
+ * a dynamic chip gets a FIXED width ([chipWidth], its widest text for this lesson), so a timer running up can never
+ * squeeze the title (QA q2-1, profile D13).
+ */
 @Composable
-private fun TitleRow(title: String, onEvent: (Ui) -> Unit, state: DsUiState, chip: @Composable (() -> Unit)? = null, trailing: @Composable (() -> Unit)? = null) {
+private fun TitleRow(title: String, onEvent: (Ui) -> Unit, state: DsUiState, chip: @Composable ((Modifier) -> Unit)? = null, chipWidth: Dp? = null, trailing: @Composable (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        // long (English) names drop to 16 sp and may take two lines: the 48-dp row holds 2 x 20 sp line height
-        val long = title.length > 12
-        Text(text = title, style = if (long) DsType.titleSmall.copy(lineHeight = 19.sp) else DsType.title, color = PicoTheme.colorScheme.labelPrimary, maxLines = if (long) 2 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).probe("title"))
-        chip?.invoke()
-        Spacer(Modifier.weight(1f))
+        FitTitle(title, Modifier.weight(1f))
+        chip?.invoke(if (chipWidth != null) Modifier.width(chipWidth) else Modifier)
         trailing?.invoke()
         if (state.screen != Screen.STARTING && state.screen != Screen.BLOCKED) {
             IconKey(R.drawable.ic_settings, rs(R.string.settings), "settings") { onEvent(Ui.OpenSettings) }
         }
+    }
+}
+
+@Composable
+private fun FitTitle(title: String, modifier: Modifier) {
+    BoxWithConstraints(modifier.fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+        val measurer = rememberTextMeasurer()
+        val big = DsType.title
+        val mid = DsType.titleSmall.copy(lineHeight = 19.sp)
+        val small = DsType.titleSmall.copy(fontSize = 14.sp, lineHeight = 17.sp)
+        val maxW = constraints.maxWidth
+        val maxH = constraints.maxHeight
+        val (style, lines) =
+            remember(title, maxW, maxH, big, mid, small) {
+                listOf(big to 1, mid to 2, small to 2).firstOrNull { (s, n) ->
+                    val r = measurer.measure(title, s, maxLines = n, constraints = Constraints(maxWidth = maxW.coerceAtLeast(1)))
+                    !r.hasVisualOverflow && r.size.height <= maxH
+                } ?: (small to 2)
+            }
+        Text(text = title, style = style, color = PicoTheme.colorScheme.labelPrimary, maxLines = lines, modifier = Modifier.probe("title"), onTextLayout = fits("control/title"))
+    }
+}
+
+/** Width of a chip slot: the widest of [texts] in the chip style, plus the pill's padding. */
+@Composable
+private fun chipWidth(texts: List<String>): Dp {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val style = DsType.label
+    return remember(texts, style, density) {
+        val px = texts.maxOfOrNull { measurer.measure(it, style, maxLines = 1).size.width } ?: 0
+        with(density) { px.toDp() } + (2 * PILL_PAD + 4).dp
     }
 }
 
@@ -316,6 +379,48 @@ private fun chipText(state: DsUiState): String? {
         }
         else -> null
     }
+}
+
+/**
+ * Every chip text the lesson can show on its flight pages, at its widest (two-digit counts, a timer past ten minutes):
+ * the chip slot is sized once from these, so the title next to it never moves while you fly.
+ */
+@Composable
+private fun chipCandidates(state: DsUiState): List<String> {
+    val l = state.lesson
+    val out = mutableListOf(rs(R.string.chip_ready), rs(R.string.chip_landed))
+    when (l) {
+        LessonId.F1 -> out += rs(R.string.chip_free)
+        LessonId.F2 -> {
+            val n = io.embodit.dronesight.domain.Waypoints.count(state.waypointRound)
+            out += rs(R.string.chip_round, state.waypointRound, n, n, clock(5999f))
+        }
+        LessonId.L6 -> {
+            out += rs(R.string.chip_full)
+            for (t in l.tasks) out += rs(R.string.chip_chain, 5, widestShort(t))
+        }
+        else -> for (t in l.tasks) out += widestLong(t)
+    }
+    // digits drawn at their widest
+    return out.map { it.replace(Regex("[0-9]"), "8") }
+}
+
+@Composable
+private fun widestShort(t: Task): String = when (t) {
+    Task.HOVER_TAIL, Task.HOVER_NOSE, Task.HOVER_ANY -> "88/88 s"
+    Task.SPIN -> "888°"
+    Task.EIGHT -> "8/4"
+    Task.LAND -> rs(R.string.chip_landing)
+    else -> ""
+}
+
+@Composable
+private fun widestLong(t: Task): String = when (t) {
+    Task.HOVER_TAIL, Task.HOVER_NOSE, Task.HOVER_ANY -> rs(R.string.chip_box, 88, 88)
+    Task.SPIN -> rs(R.string.chip_spin, 888)
+    Task.EIGHT -> rs(R.string.chip_gate, 8, 8)
+    Task.LAND -> listOf(rs(R.string.chip_up, 8.8f), rs(R.string.chip_landing)).maxBy { it.length }
+    else -> ""
 }
 
 @Composable
@@ -347,7 +452,9 @@ private fun Flight(state: DsUiState, onEvent: (Ui) -> Unit) {
     val placing = state.screen == Screen.PLACING
     val inFlightPages = state.isFlight
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        TitleRow(title, onEvent, state, chip = chipText(state)?.let { t -> { Pill(t, name = "chip") } }) { MuteSwitch(state, onEvent) }
+        val chip = chipText(state)
+        val slot = if (state.screen == Screen.STARTING || state.screen == Screen.FINDING_FLOOR || state.screen == Screen.PLACING || state.screen == Screen.BLOCKED) null else chipWidth(chipCandidates(state))
+        TitleRow(title, onEvent, state, chip = chip?.let { c -> { m -> Pill(c, name = "chip", modifier = m) } }, chipWidth = slot) { MuteSwitch(state, onEvent) }
         // row 2: mode / wind
         Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
             val en = inFlightPages
@@ -370,7 +477,7 @@ private fun Flight(state: DsUiState, onEvent: (Ui) -> Unit) {
             Key(rs(R.string.dir_hints), "hints_toggle", R.drawable.ic_explore, if (state.directionHints) KeyKind.ON else KeyKind.NORMAL, 48.dp) { onEvent(Ui.ToggleHints) }
             Spacer(Modifier.weight(1f))
             // the A / X shortcut only exists with controllers; without them the main key is the pause
-            if (state.hasController) Text(text = rs(R.string.key_pause), style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1)
+            if (state.hasController) Text(text = rs(R.string.key_pause), style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, onTextLayout = fits("control/key_pause"))
         }
         if (placing) Unit
     }
@@ -408,7 +515,7 @@ private fun HintLine(state: DsUiState) {
             CircularProgressIndicator(modifier = Modifier.size(20.dp), color = PicoTheme.colorScheme.labelPrimary, progressSize = CircularProgressDefaults.circleProgressSize(20.dp))
             Spacer(Modifier.width(8.dp))
         }
-        Text(text = text, style = DsType.label, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(text = text, style = DsType.label, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis, onTextLayout = fits("control/hint"))
     }
 }
 
@@ -418,7 +525,7 @@ private fun HintLine(state: DsUiState) {
 private fun Welcome(state: DsUiState, onEvent: (Ui) -> Unit) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(text = rs(R.string.app_name), style = DsType.title, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1)
+            Text(text = rs(R.string.app_name), style = DsType.title, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, onTextLayout = fits("welcome/title"))
         }
         WelcomeLine(R.drawable.ic_gamepad, rs(if (state.hasController) R.string.welcome_1 else R.string.welcome_1_nc))
         WelcomeLine(R.drawable.ic_height, rs(R.string.welcome_2))
@@ -433,7 +540,7 @@ private fun WelcomeLine(icon: Int, text: String) {
     Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(painter = painterResource(icon), contentDescription = null, modifier = Modifier.size(24.dp), tint = PicoTheme.colorScheme.labelPrimary)
         Spacer(Modifier.width(12.dp))
-        Text(text = text, style = DsType.body, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(text = text, style = DsType.body, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, onTextLayout = fits("welcome/line"))
     }
 }
 
@@ -450,7 +557,7 @@ private fun Picker(state: DsUiState, onEvent: (Ui) -> Unit) {
         }
         Spacer(Modifier.weight(1f))
         Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(text = rs(R.string.tol_label), style = DsType.body, color = PicoTheme.colorScheme.labelPrimary)
+            Text(text = rs(R.string.tol_label), style = DsType.body, color = PicoTheme.colorScheme.labelPrimary, onTextLayout = fits("picker/tol_label"))
             Spacer(Modifier.weight(1f))
             Segments(listOf(Tolerance.LENIENT to rs(R.string.tol_lenient), Tolerance.STANDARD to rs(R.string.tol_standard)), state.prefs.tolerance, "tol", 104) { onEvent(Ui.Tol(it)) }
         }
@@ -492,8 +599,8 @@ private fun LessonRow(state: DsUiState, id: LessonId, onClick: () -> Unit) {
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(text = rs(lessonName(id)), style = DsType.titleSmall, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(text = rs(lessonTag(id)), style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(text = rs(lessonName(id)), style = DsType.titleSmall, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, onTextLayout = fits("picker/name_$id"))
+                Text(text = rs(lessonTag(id)), style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, onTextLayout = fits("picker/tag_$id"))
             }
             Spacer(Modifier.width(8.dp))
             Pill(bestText(state, id), name = "best_$id")
@@ -508,14 +615,14 @@ private fun Result(state: DsUiState, onEvent: (Ui) -> Unit) {
     val o = state.outcome ?: return
     val id = state.outcomeLesson
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        TitleRow(rs(lessonName(id)), onEvent, state, chip = {
+        TitleRow(rs(lessonName(id)), onEvent, state, chip = { m ->
             when (o.grade) {
-                Grade.PASS -> Pill(rs(R.string.res_pass), DsColors.Passable, DsColors.OnFill, "grade")
-                Grade.NEAR -> Pill(rs(R.string.res_near), DsColors.Alert, DsColors.OnFill, "grade")
-                Grade.RETRY -> Pill(rs(R.string.res_retry), DsColors.Error, DsColors.OnFill, "grade")
+                Grade.PASS -> Pill(rs(R.string.res_pass), DsColors.Passable, DsColors.OnFill, "grade", m)
+                Grade.NEAR -> Pill(rs(R.string.res_near), DsColors.Alert, DsColors.OnFill, "grade", m)
+                Grade.RETRY -> Pill(rs(R.string.res_retry), DsColors.Error, DsColors.OnError, "grade", m)
             }
         })
-        Text(text = o.diffs.map { diffText(it) }.joinToString(" · "), style = DsType.body, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(48.dp).probe("diffs"))
+        Text(text = o.diffs.map { diffText(it) }.joinToString(" · "), style = DsType.body, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(48.dp).probe("diffs"), onTextLayout = fits("result/diffs"))
         if (o.chain.isNotEmpty()) {
             val tasks = id.tasks
             Row(Modifier.fillMaxWidth().height(32.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -527,14 +634,14 @@ private fun Result(state: DsUiState, onEvent: (Ui) -> Unit) {
         }
         val mode = rs(if (DsController.currentMode() == FlightMode.GPS) R.string.mode_gps else R.string.mode_atti)
         val wind = rs(when (DsController.currentWind()) { WindLevel.NONE -> R.string.wind_none; WindLevel.LIGHT -> R.string.wind_light; WindLevel.GUSTY -> R.string.wind_gusty })
-        Text(text = rs(R.string.res_meta, clock(o.timeS), mode, wind) + if (state.loosened) "  ·  " + rs(R.string.loosened) else "", style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.probe("meta"))
+        Text(text = rs(R.string.res_meta, clock(o.timeS), mode, wind) + if (state.loosened) "  ·  " + rs(R.string.loosened) else "", style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.probe("meta"), onTextLayout = fits("result/meta"))
         Spacer(Modifier.weight(1f))
         Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Key(rs(R.string.retry), "retry", R.drawable.ic_replay, KeyKind.PRIMARY, 56.dp, Modifier.weight(1f)) { onEvent(Ui.Retry) }
             Key(rs(if (id == LessonId.F2) R.string.next_round else R.string.next_lesson), "next_lesson", R.drawable.ic_chevron_right, KeyKind.NORMAL, 56.dp, Modifier.weight(1f)) { onEvent(Ui.Next) }
             Key(rs(R.string.to_picker), "to_picker", null, KeyKind.NORMAL, 48.dp, Modifier.weight(0.8f)) { onEvent(Ui.ToPicker) }
         }
-        Text(text = rs(R.string.res_small), style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.probe("small_print"))
+        Text(text = rs(R.string.res_small), style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.probe("small_print"), onTextLayout = fits("result/small_print"))
     }
 }
 
@@ -546,8 +653,8 @@ private fun SetRow(icon: Int, label: String, height: Dp = 52.dp, note: String? =
         Icon(painter = painterResource(icon), contentDescription = null, modifier = Modifier.size(22.dp), tint = PicoTheme.colorScheme.labelPrimary)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(text = label, style = DsType.body, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (note != null) Text(text = note, style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(text = label, style = DsType.body, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, onTextLayout = fits("settings/row"))
+            if (note != null) Text(text = note, style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, onTextLayout = fits("settings/row_note"))
         }
         Spacer(Modifier.width(8.dp))
         control()
@@ -558,7 +665,7 @@ private fun SetRow(icon: Int, label: String, height: Dp = 52.dp, note: String? =
 private fun Stepper(value: String, name: String, onMinus: () -> Unit, onPlus: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         IconKey(R.drawable.ic_remove, "-", "${name}_minus", onClick = onMinus)
-        Text(text = value, style = DsType.button, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, modifier = Modifier.width(72.dp).padding(horizontal = 6.dp).probe("${name}_value"))
+        Text(text = value, style = DsType.button, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, modifier = Modifier.width(72.dp).padding(horizontal = 6.dp).probe("${name}_value"), onTextLayout = fits("settings/${name}_value"))
         IconKey(R.drawable.ic_add, "+", "${name}_plus", onClick = onPlus)
     }
 }
@@ -583,7 +690,7 @@ private fun Settings(state: DsUiState, onEvent: (Ui) -> Unit) {
     }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(text = rs(R.string.set_title), style = DsType.title, color = PicoTheme.colorScheme.labelPrimary, modifier = Modifier.weight(1f))
+            Text(text = rs(R.string.set_title), style = DsType.title, color = PicoTheme.colorScheme.labelPrimary, modifier = Modifier.weight(1f), onTextLayout = fits("settings/title"))
             Key(rs(R.string.done_btn), "settings_done", R.drawable.ic_check, KeyKind.PRIMARY, 48.dp) { onEvent(Ui.CloseSettings) }
         }
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(scroll).padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -595,7 +702,7 @@ private fun Settings(state: DsUiState, onEvent: (Ui) -> Unit) {
                     vol = snapped
                     pr("volume") { it.copy(volume = snapped.roundToInt()) }
                 })
-                Text(text = String.format(Locale.US, "%d%%", vol.roundToInt()), style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, modifier = Modifier.width(48.dp).padding(start = 6.dp).probe("volume_pct"))
+                Text(text = String.format(Locale.US, "%d%%", vol.roundToInt()), style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, modifier = Modifier.width(48.dp).padding(start = 6.dp).probe("volume_pct"), onTextLayout = fits("settings/volume_pct"))
                 Switch(checked = !p.muted, onCheckedChange = { on -> pr("mute") { it.copy(muted = !on) } }, modifier = Modifier.probe("mute_settings"))
             }
             SetRow(R.drawable.ic_speed, rs(R.string.set_volume) + " · " + rs(R.string.vol_low) + " / " + rs(R.string.vol_mid) + " / " + rs(R.string.vol_high)) {
@@ -656,9 +763,9 @@ private fun Settings(state: DsUiState, onEvent: (Ui) -> Unit) {
                 }
             }
             Column(Modifier.fillMaxWidth().padding(vertical = 6.dp).probe("about")) {
-                Text(text = rs(R.string.about), style = DsType.titleSmall, color = PicoTheme.colorScheme.labelPrimary)
-                Text(text = rs(R.string.about_1), style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2)
-                Text(text = rs(R.string.about_2), style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2)
+                Text(text = rs(R.string.about), style = DsType.titleSmall, color = PicoTheme.colorScheme.labelPrimary, onTextLayout = fits("settings/about"))
+                Text(text = rs(R.string.about_1), style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, onTextLayout = fits("settings/about_1"))
+                Text(text = rs(R.string.about_2), style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, onTextLayout = fits("settings/about_2"))
             }
             Key(rs(R.string.quit), "quit", R.drawable.ic_logout, KeyKind.DANGER, 52.dp, Modifier.fillMaxWidth()) { onEvent(Ui.QuitAsk) }
             Spacer(Modifier.height(16.dp))
@@ -675,7 +782,7 @@ object SettingsScroll {
 @Composable
 private fun InvSwitch(label: String, on: Boolean, name: String, onChange: (Boolean) -> Unit) {
     Row(Modifier.width(196.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(text = label, style = DsType.body, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, modifier = Modifier.weight(1f))
+        Text(text = label, style = DsType.body, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, modifier = Modifier.weight(1f), onTextLayout = fits("settings/inv_$name"))
         Switch(checked = on, onCheckedChange = onChange, modifier = Modifier.probe(name))
     }
 }
@@ -685,8 +792,8 @@ private fun InvSwitch(label: String, on: Boolean, name: String, onChange: (Boole
 @Composable
 private fun ExitConfirm(onEvent: (Ui) -> Unit) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = rs(R.string.exit_title), style = DsType.title, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, modifier = Modifier.height(32.dp))
-        Text(text = rs(R.string.exit_body), style = DsType.body, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1)
+        Text(text = rs(R.string.exit_title), style = DsType.title, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, modifier = Modifier.height(32.dp), onTextLayout = fits("exit/title"))
+        Text(text = rs(R.string.exit_body), style = DsType.body, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, onTextLayout = fits("exit/body"))
         Spacer(Modifier.weight(1f))
         Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Key(rs(R.string.cancel), "quit_cancel", null, KeyKind.NORMAL, 56.dp, Modifier.weight(1f)) { onEvent(Ui.QuitCancel) }
@@ -704,12 +811,12 @@ internal fun BlockedDialog(state: DsUiState?, onEvent: (Ui) -> Unit) {
         Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(32.dp).clip(CircleShape).background(DsColors.Error), contentAlignment = Alignment.Center) {
-                    Icon(painter = painterResource(R.drawable.ic_error), contentDescription = null, modifier = Modifier.size(24.dp), tint = DsColors.OnFill)
+                    Icon(painter = painterResource(R.drawable.ic_error), contentDescription = null, modifier = Modifier.size(24.dp), tint = DsColors.OnError)
                 }
                 Spacer(Modifier.width(10.dp))
-                Text(text = rs(R.string.blk_title), style = DsType.title, color = PicoTheme.colorScheme.labelPrimary)
+                Text(text = rs(R.string.blk_title), style = DsType.title, color = PicoTheme.colorScheme.labelPrimary, onTextLayout = fits("dialog/title"))
             }
-            Text(text = rs(if (state.blockReason == "not-in-full-space") R.string.blk_fullspace else R.string.blk_head), style = DsType.body, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2)
+            Text(text = rs(if (state.blockReason == "not-in-full-space") R.string.blk_fullspace else R.string.blk_head), style = DsType.body, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, onTextLayout = fits("dialog/body"))
             Spacer(Modifier.weight(1f))
             Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Key(rs(R.string.blk_retry), "blk_retry", R.drawable.ic_replay, KeyKind.PRIMARY, 56.dp, Modifier.weight(1f)) { onEvent(Ui.BlockRetry) }
@@ -725,19 +832,21 @@ internal fun BlockedDialog(state: DsUiState?, onEvent: (Ui) -> Unit) {
 @Composable
 internal fun AltitudeTag(state: DsUiState?) {
     val big = state?.prefs?.bigTag == true
+    // 56 / 72 dp (design) clipped the second line ("Tail-in") by a few px: the 28 sp figure's font padding takes more than
+    // its 32 sp line height (v0.1.1 OVERFLOW tag/orient). 64 / 84 dp hold both lines.
     val w = if (big) 200 else 160
-    val h = if (big) 72 else 56
+    val h = if (big) 84 else 64
     Box(Modifier.size(PanelSizes.TAG_W.dp, PanelSizes.TAG_H.dp), contentAlignment = Alignment.Center) {
         if (state == null) return@Box
         Column(Modifier.size(w.dp, h.dp).clip(RoundedCornerShape(12.dp)).background(DsColors.TagBg).padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             val sn = state.snap
             val off = sn.landingOffsetCm
             if (state.screen == Screen.LANDING && off != null) {
-                Text(text = rs(R.string.tag_off, off / 100f), style = if (big) DsType.tagBig.copy(fontSize = 34.sp()) else DsType.tagBig.copy(fontSize = 22.sp()), color = DsColors.TagInk, maxLines = 1)
+                Text(text = rs(R.string.tag_off, off / 100f), style = if (big) DsType.tagBig.copy(fontSize = 34.sp()) else DsType.tagBig.copy(fontSize = 22.sp()), color = DsColors.TagInk, maxLines = 1, onTextLayout = fits("tag/off"))
             } else {
-                Text(text = String.format(Locale.US, "%.1f m", sn.heightDm / 10f), style = if (big) DsType.tagBig.copy(fontSize = 40.sp()) else DsType.tagBig, color = DsColors.TagInk, maxLines = 1)
+                Text(text = String.format(Locale.US, "%.1f m", sn.heightDm / 10f), style = if (big) DsType.tagBig.copy(fontSize = 40.sp()) else DsType.tagBig, color = DsColors.TagInk, maxLines = 1, onTextLayout = fits("tag/height"))
                 val o = rs(when (sn.orientation) { Orientation.TAIL_IN -> R.string.tag_tail; Orientation.NOSE_IN -> R.string.tag_nose; Orientation.SIDE -> R.string.tag_side })
-                Text(text = o + if (sn.gusting) "  " + rs(R.string.tag_wind) else "", style = if (big) DsType.tagSmall.copy(fontSize = 18.sp()) else DsType.tagSmall, color = DsColors.TagInk, maxLines = 1)
+                Text(text = o + if (sn.gusting) "  " + rs(R.string.tag_wind) else "", style = if (big) DsType.tagSmall.copy(fontSize = 18.sp()) else DsType.tagSmall, color = DsColors.TagInk, maxLines = 1, onTextLayout = fits("tag/orient"))
             }
         }
     }
@@ -772,7 +881,7 @@ private fun Pad(label: String, left: Boolean) {
     val shownX = if (held) dx else (if (left) VirtualSticks.lx else VirtualSticks.rx) * 80f
     val shownY = if (held) dy else -(if (left) VirtualSticks.ly else VirtualSticks.ry) * 80f
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = label, style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1)
+        Text(text = label, style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, onTextLayout = fits("sticks/label_$left"))
         Spacer(Modifier.height(4.dp))
         val knob = DsColors.Interaction
         val ring = PicoTheme.colorScheme.labelPrimary

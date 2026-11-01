@@ -180,7 +180,7 @@
     <string name="reset_yes">清掉</string>
     <string name="cancel">取消</string>
     <string name="about">关于</string>
-    <string name="about_1">v0.1.0 · 科目名对照 CAAC 多旋翼视距内实践考试，场地按客厅缩放</string>
+    <string name="about_1">v0.1.1 · 科目名对照 CAAC 多旋翼视距内实践考试，场地按客厅缩放</string>
     <string name="about_2">练手感用的，不是培训课时，不能替代报名考试</string>
     <string name="quit">退出应用</string>
     <string name="exit_title">退出视距飞手？</string>

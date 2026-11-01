@@ -44,9 +44,9 @@ case "${1:-}" in
     check; adb -s $DEV logcat -d -v time 2>/dev/null | grep -E "AndroidRuntime|FATAL EXCEPTION|Process: $PKG" | tail -n 40 | cut -c1-400 ;;
   shot)
     check; dir="${3:-$ROOT/.scratch/shots}"; mkdir -p "$dir"
-    # emu screenrecord screenshot = the compositor output in ~6 s; PICO=1 uses pico-cli capture screenshot (slower)
-    if [ -n "${PICO:-}" ]; then pico-cli capture screenshot --device $DEV --out "$dir/${2:-shot}.png" >/dev/null 2>&1
-    else adb -s $DEV emu screenrecord screenshot "$dir/${2:-shot}.png" >/dev/null 2>&1 || pico-cli capture screenshot --device $DEV --out "$dir/${2:-shot}.png" >/dev/null 2>&1; fi
+    # pico-cli only (2026-10-31 factory rule): `adb emu screenrecord screenshot` stalls the runtime ~5 s per shot and a
+    # burst of them gets it killed by the watchdog. Keep >= 10 s between two shots.
+    pico-cli capture screenshot --device $DEV --out "$dir/${2:-shot}.png" >/dev/null 2>&1
     echo "$dir/${2:-shot}.png" ;;
   *) echo "usage: dev.sh build|test|install|launch|stop|relaunch|cmd|log|crash|shot" ;;
 esac

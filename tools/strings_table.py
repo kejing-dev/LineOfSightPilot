@@ -202,7 +202,7 @@ S = [
     ("reset_yes", "清掉", "Clear"),
     ("cancel", "取消", "Cancel"),
     ("about", "关于", "About"),
-    ("about_1", "v0.1.0 · 科目名对照 CAAC 多旋翼视距内实践考试，场地按客厅缩放", "v0.1.0 · Lesson names follow the CAAC multirotor VLOS test, scaled to a living room"),
+    ("about_1", "v0.1.1 · 科目名对照 CAAC 多旋翼视距内实践考试，场地按客厅缩放", "v0.1.1 · Lesson names follow the CAAC multirotor VLOS test, scaled to a living room"),
     ("about_2", "练手感用的，不是培训课时，不能替代报名考试", "For practice only. Not training hours, not a substitute for the real test"),
     ("quit", "退出应用", "Quit app"),
     # S12

@@ -12,6 +12,12 @@ object DsColors {
 
     // dark ink on the interaction / passable / alert / error fills (palette.brandTokens.onInteraction / onPassable)
     val OnFill = Color(0xFF1E2A33) // design-style: fixed-figma-color ink on light fills (12:1 / 9:1)
+    // ink on the error red (danger keys 退出应用 / 退出 / 清掉, the 再来 pill, S13 badge): near-black, 7.0:1 on #FF6B6B and 6.8:1
+    // on the red as the emulator renders it (#ED7470); OnFill there was 5.3 / 5.1 and thin strokes measured 4.1 (QA #2)
+    val OnError = Color(0xFF0A0D10) // design-style: fixed-figma-color ink on the error fill
+    // danger KEYS only (退出应用 / 退出 / 清掉): the error red one step lighter, so the 20 sp label still measures >= 4.5:1
+    // where the emulator draws its strokes 1-2 px wide (QA #2: 4.1-4.2:1 on #FF6B6B); 8.6:1 by value with OnError
+    val DangerFill = Color(0xFFFF8A85) // design-style: fixed-figma-color danger key fill
 
     // status pills, tags: opaque dark slate with light text (palette.brandTokens.tagBg)
     val TagBg = Color(0xFF1E2A33) // design-style: fixed-figma-color tag background

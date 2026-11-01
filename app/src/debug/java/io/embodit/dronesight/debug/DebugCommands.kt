@@ -151,7 +151,8 @@ object DebugCommands {
                 "floorscan" -> { sc?.forceScan = arg != "0"; "floorscan=${sc?.forceScan}" }
                 "nofloor" -> { sc?.forceNoFloor = arg != "0"; "nofloor=${sc?.forceNoFloor}" }
                 "floor" -> { sc?.forceFloor = arg != "0"; "floor=${sc?.forceFloor}" }
-                "nocontroller" -> { DsController.debugNoController(arg != "0"); "nocontroller=${arg != "0"}" }
+                "nocontroller" -> { DsController.debugNoController(arg.ifEmpty { "1" }); "nocontroller=$arg hasController=${DsController.state.value.hasController}" }
+                "fit" -> { if (arg == "reset") io.embodit.dronesight.ui.components.TextFit.reset(); io.embodit.dronesight.ui.components.TextFit.summary() }
                 "ray" -> { val (x, z) = xy(arg); sc?.debugRay = if (arg == "off") null else Vec3(x, 0f, z); "ray=${sc?.debugRay}" }
                 "stick" -> {
                     // stick l x,y r x,y [ms]

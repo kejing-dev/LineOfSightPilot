@@ -59,6 +59,9 @@ INTERACTION = hexrgb("#FFB53D")
 PASSABLE = hexrgb("#4FD18B")
 ALERT = hexrgb("#FF8A3D")
 ERROR = hexrgb("#FF6B6B")
+ERROR_RENDERED = hexrgb("#ED7470")  # the error red as the emulator draws it (QA #2 measured)
+ON_ERROR = hexrgb("#0A0D10")  # DsColors.OnError (v0.1.1)
+DANGER_FILL = hexrgb("#FF8A85")  # DsColors.DangerFill (v0.1.1, danger keys only)
 TAG_BG = hexrgb("#1E2A33")
 TAG_INK = hexrgb("#E6F1F7")
 WARN_BG = hexrgb("#4A2E0A")
@@ -73,7 +76,9 @@ FIXED = [
     ("ink #1E2A33 / interaction #FFB53D", "primary keys (好，开始 / 放在这里 / 起飞 / 暂停 / 继续 / 重飞 / 好了 / 再试一次), selected segment items (mode, wind, judging, settings segments)", INK, INTERACTION, 4.5),
     ("ink #1E2A33 / passable #4FD18B", "result pill 过 ✓, switched-on toggles (虚拟摇杆 / 方向提示 when on)", INK, PASSABLE, 4.5),
     ("ink #1E2A33 / alert #FF8A3D", "result pill 差一点", INK, ALERT, 4.5),
-    ("ink #1E2A33 / error #FF6B6B", "danger keys (退出应用 / 退出 / 清掉 / S13 退出), result pill 再来, S13 error badge icon", INK, ERROR, 4.5),
+    ("on-error #0A0D10 / danger fill #FF8A85", "danger keys 退出应用 / 退出 / 清掉 (20 sp bold; v0.1.1, was #1E2A33 on #FF6B6B 5.28, screenshot 4.1-4.2)", ON_ERROR, DANGER_FILL, 4.5),
+    ("on-error #0A0D10 / error #FF6B6B", "result pill 再来, S13 error badge icon (v0.1.1; was #1E2A33 5.28)", ON_ERROR, ERROR, 4.5),
+    ("on-error #0A0D10 / error as rendered #ED7470", "same, against the red the emulator actually draws", ON_ERROR, ERROR_RENDERED, 4.5),
     ("tag ink #E6F1F7 / tag #1E2A33", "status pills (chip 框内 12/20 s …), picker best chips, idle main key (准备中 / 着陆), chain ✓ pills, height tag, 3D labels (gate 1-4, 0°-270°, 右杆→ / 右杆↑)", TAG_INK, TAG_BG, 4.5),
     ("warn ink #FFD9A8 / warn #4A2E0A", "hint line 飞出场地了 / 飞机在你身边了 / 落得有点重", WARN_INK, WARN_BG, 4.5),
     ("err ink #FFC5C5 / err #4A1414", "hint line 落重了 · 飞机回垫子, chain ✗ pills", ERR_INK, ERR_BG, 4.5),

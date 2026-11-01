@@ -26,6 +26,7 @@ import com.pico.spatial.ui.foundation.gesture.SpatialDragValue
 import com.pico.spatial.ui.foundation.gesture.SpatialTapValue
 import com.pico.spatial.ui.geometry.Offset3D
 import io.embodit.dronesight.domain.CourseFrame
+import io.embodit.dronesight.domain.RingGuard
 import io.embodit.dronesight.domain.CourseGeometry
 import io.embodit.dronesight.domain.FlightPhase
 import io.embodit.dronesight.domain.HeadPose
@@ -230,6 +231,7 @@ class DroneScene {
         ActiveScene.current = this
         attached = true
         DsController.quitHook = { releaseAll() }
+        DsController.ringGuard = { ringGuard() }
         bindPanels(attachments)
         buildJob =
             scope?.launch {
@@ -394,6 +396,7 @@ class DroneScene {
         attached = false
         if (ActiveScene.current === this) ActiveScene.current = null
         DsController.quitHook = null
+        DsController.ringGuard = null
         main.removeCallbacksAndMessages(null)
         buildJob?.cancel()
         scope?.cancel()
@@ -841,8 +844,10 @@ class DroneScene {
     private fun placePanels(ui: DsUiState, now: Long) {
         val rig = rig ?: return
         if (ui.panelEpoch != panelEpoch && hasHead) {
-            if (panelEpoch >= 0 || panelPose == null) placeControlPanel(if (panelEpoch < 0) "first" else "recall")
+            val recall = panelEpoch >= 0
+            if (recall || panelPose == null) placeControlPanel(if (panelEpoch < 0) "first" else "recall")
             panelEpoch = ui.panelEpoch
+            if (recall) DsController.onPanelMoved("recall")
         }
         val pp = panelPose ?: return
         // the slot is 712 dp tall and drawn from its top edge: the design centre is the centre of the 308-dp page
@@ -930,6 +935,7 @@ class DroneScene {
                 panelPose?.let { pp -> panelPose = Upright(pp.position, faceYawOf(pp.position)) }
                 panelFacePoint = pose.position
                 DsLog.i("DRAG end panel=${DsLog.pos(panelPose?.position)}")
+                DsController.onPanelMoved("drag")
             }
         }
     }
@@ -1071,6 +1077,15 @@ class DroneScene {
     }
 
     fun headLocal(): Vec3? = frame?.toLocal(pose.position)
+
+    /** Your real eyes and the control panel (page + stick pads) in course-local metres for the waypoint run (q2-2). */
+    private fun ringGuard(): RingGuard? {
+        val f = frame ?: return null
+        val pp = panelPose ?: return null
+        if (!hasHead) return null
+        val m = DP_M * PanelSizes.SCALE
+        return RingGuard.of(f, pose.position, pp, PanelSizes.CONTROL_W * m, PanelSizes.CONTROL_H * m, PanelSizes.STICKS_W * m, PanelSizes.STICKS_H * m)
+    }
 
     fun debugFTest(on: Boolean) {
         fTest = on

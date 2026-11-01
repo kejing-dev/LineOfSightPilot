@@ -55,7 +55,7 @@ object PanelSizes {
     const val STICKS_W = 480f
     const val STICKS_H = 220f
     const val TAG_W = 200f
-    const val TAG_H = 72f
+    const val TAG_H = 84f
     const val DIALOG_W = 400f
     const val DIALOG_H = 220f
 }

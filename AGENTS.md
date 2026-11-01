@@ -101,10 +101,20 @@ flight sensors (factory rule 2026-10-29: no shortcut state writes). The emulator
 | `waypoint seed N` `round N` `best L1 20` | F2 round N / set the round / inject a best score (picker chip) |
 | `settings [top|bottom]` `closeSettings` `replace` `recall` `quitAsk` `quitCancel` `quitYes` | S11 (scrolled) / done / 重摆场地 / 叫回面板 / S12 / quit |
 | `lang zh|en|system` `mute on|off` `volume N` `poles M` `seated 1|0` `bigtag 1|0` | settings |
-| `nocontroller 1|0` `vsticks` `hints` `block` `unblock` | no-controller path (pads auto, S01 / S03 copy) / toggles / S13 |
+| `nocontroller 1|0|auto` `vsticks` `hints` `block` `unblock` | controller presence as the provider would report it: 1 = none (pads auto, S01 / S03 no-controller copy), 0 = connected (with-controller copy, also on the emulator), auto = real / toggles / S13 |
+| `fit` `fit reset` | D13 text-fit summary: layouts checked, texts that overflowed (each also logs `OVERFLOW <panel>/<control>`) |
 | `view DEG` | emulator camera cannot turn: placements use the head turned DEG (+ = left); `view -38` = panel ahead |
 | `state S01..S15 | S06A` | macro of the above to reach a design state |
 | `where` `panels` `instances` `bounds PANEL` `dump` `ftest on|off` | diagnostics; `ftest` puts F↑ on the gate-1 tag ×3 (D10) |
+
+Text fit (D13 pre-QA gate): every panel Text reports to `TextFit` (`onTextLayout = fits("panel/control")`); a text that
+does not fit logs `OVERFLOW …`. `tools/fit_sweep.sh` runs every state in en + zh with the widest chips (hover 15/20 s, 360°,
+gate 4/4, round 12 past 10:00) and prints the OVERFLOW lines (must be none). Page titles fit themselves (20 sp / 1 line →
+16 sp / 2 → 14 sp / 2), dynamic chips sit in a fixed-width slot sized from their widest text for the lesson.
+
+Waypoint rings (F2) are drawn from the REAL head, panel (page + stick pads) and course pose (`RingGuard`, logged as
+`RINGS round=… guard=live eye=… panelAz=… near=…`): every ring point >= 1.5 m from the head, none in the panel's window
+seen from the eyes; re-drawn when the panel is dragged / called back before take-off (WaypointTest sweeps 12 096 poses).
 
 Virtual pads end to end: `tools/pad_lesson.sh [OUTDIR]` (L1 with the pads only: take off by holding the left pad up
 1 s (`PAD_TAKEOFF=0` uses the 起飞 key), climb into the box, 20 s GPS hold, sink onto the pad -> `RESULT … PASS`).

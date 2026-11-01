@@ -12,6 +12,7 @@ import io.embodit.dronesight.domain.Grade
 import io.embodit.dronesight.domain.LessonId
 import io.embodit.dronesight.domain.Leniency
 import io.embodit.dronesight.domain.Orientation
+import io.embodit.dronesight.domain.RingGuard
 import io.embodit.dronesight.domain.Session
 import io.embodit.dronesight.domain.Task
 import io.embodit.dronesight.domain.Tolerance
@@ -83,6 +84,12 @@ object DsController {
     private val nearCount = HashMap<LessonId, Int>()
     private val levels = HashMap<LessonId, Int>()
     private var stickOverride: Boolean? = null
+
+    /**
+     * The scene's view of the room for the waypoint run (QA q2-2): your real head and the control panel's corners in
+     * course-local metres, at the moment a round is drawn. Null before the course is placed (default placement then).
+     */
+    var ringGuard: (() -> RingGuard?)? = null
     private var chainHintUntil = 0L
 
     val soundOrNull: Sound?
@@ -138,7 +145,11 @@ object DsController {
         set("blocked $reason") { it.copy(screen = Screen.BLOCKED, back = if (it.screen == Screen.FLYING) Screen.PAUSED else it.screen, blockReason = reason, loading = false) }
     }
 
+    /** What the controller tracking provider last said (before any debug override). */
+    private var lastReportedController = true
+
     fun onControllerPresence(has: Boolean) {
+        lastReportedController = has
         val forced = stickOverride
         val h = forced ?: has
         if (h == _state.value.hasController) return
@@ -397,7 +408,14 @@ object DsController {
         val s = _state.value
         val p = s.prefs
         val lv = levels[id] ?: 0
-        val rings = if (id == LessonId.F2) Waypoints.generate(s.waypointRound) else emptyList()
+        val rings =
+            if (id == LessonId.F2) {
+                val live = runCatching { ringGuard?.invoke() }.getOrNull()
+                val guard = live ?: RingGuard.default()
+                Waypoints.generate(s.waypointRound, guard).also { r ->
+                    DsLog.i(String.format(java.util.Locale.US, "RINGS round=%d guard=%s eye=%s panelAz=%.1f half=%.1f pass=%d near=%.2f centres=%s", s.waypointRound, if (live != null) "live" else "default", DsLog.pos(guard.eye), Math.toDegrees(guard.panelAz.toDouble()), Math.toDegrees(guard.panelHalfAz.toDouble()), Waypoints.lastPass, r.minOfOrNull { guard.flatDist(it.center) - it.radius } ?: -1f, r.joinToString(";") { DsLog.pos(it.center) }))
+                }
+            } else emptyList()
         val sess = Session(id, course(p), Leniency(p.tolerance, lv), rings)
         val mode = if (id == LessonId.L7) FlightMode.ATTI else p.mode
         val wind = if (id == LessonId.L7) WindLevel.LIGHT else if (id == LessonId.F2) maxOf(p.wind, Waypoints.wind(s.waypointRound)) else p.wind
@@ -434,15 +452,31 @@ object DsController {
         main.postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 300)
     }
 
+    /**
+     * The panel was dragged or called back (D20): a waypoint round that has not taken off yet is drawn again for the
+     * panel's new place, so no ring sits between your eyes and the panel.
+     */
+    fun onPanelMoved(why: String) {
+        val s = _state.value
+        if (s.screen == Screen.READY && s.lesson == LessonId.F2) newSession(LessonId.F2, "panel $why")
+    }
+
     /** The scene releases trackers / audio / planes before the process ends. */
     var quitHook: (() -> Unit)? = null
 
     // ============================================================================================== debug seams
 
-    fun debugNoController(on: Boolean) {
-        stickOverride = if (on) false else null
-        set("nocontroller=$on") { s -> val has = if (on) false else true; s.copy(hasController = has, vsticksOn = sticksOn(s.prefs.vsticks, has, null), hint = if (s.screen == Screen.PLACING) (if (has) Hint.S03 else Hint.S03_NO_CONTROLLER) else s.hint) }
+    /**
+     * Debug `nocontroller 1|0|auto`: the controller presence the tracking provider would report. 1 = none (pads, S01 /
+     * S03 no-controller copy), 0 = two controllers connected (the with-controller copy, reachable on the emulator, which
+     * has none: QA #2 known issue), auto = what the provider really says; the override sits where its report lands.
+     */
+    fun debugNoController(arg: String) {
+        stickOverride = when (arg) { "auto" -> null; "0", "false", "off" -> true; else -> false }
+        val has = stickOverride ?: lastReportedController
+        set("nocontroller=$arg") { s -> s.copy(hasController = has, vsticksOn = sticksOn(s.prefs.vsticks, has, null), hint = if (s.screen == Screen.PLACING) (if (has) Hint.S03 else Hint.S03_NO_CONTROLLER) else s.hint) }
     }
+
 
     fun debugFirstRun() {
         store?.clearAll()
