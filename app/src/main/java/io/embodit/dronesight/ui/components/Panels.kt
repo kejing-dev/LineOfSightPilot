@@ -85,18 +85,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
-private val GlassShape = RoundedCornerShape(24.dp)
 private const val PILL_PAD = 12
-
-/** Glass panel root, drawn from the top edge down to [h] (the rest of the declared panel stays empty). */
-@Composable
-private fun Glass(w: Float, h: Float, padding: Int = 16, content: @Composable () -> Unit) {
-    Box(Modifier.size(w.dp, PanelSizes.CONTROL_MAX_H.dp), contentAlignment = Alignment.TopStart) {
-        Box(modifier = Modifier.size(w.dp, h.dp).clip(GlassShape).backgroundMaterial(enable = true, style = Material.Regular).then(glassRefresh())) {
-            Box(Modifier.fillMaxSize().padding(padding.dp)) { content() }
-        }
-    }
-}
 
 /** A small status pill: opaque dark slate with light text (13:1), readable on any glass / room behind it. */
 @Composable
@@ -288,20 +277,38 @@ private fun diffText(d: Diff): String = when (d) {
 
 // ================================================================================================= control panel
 
-/** The one standing panel (design panels.controlPanel): every page is drawn here, in place, from the top edge down. */
+/**
+ * 飞行 page of the main window (v0.1.2: the system window brings the glass; profile D8 / D21): welcome, the flight
+ * page (S00-S07, S09, S14, S15) with the stick pads under it, the result (S08) and the blocked notice (S13).
+ */
 @Composable
-internal fun ControlPanel(state: DsUiState?, onEvent: (Ui) -> Unit) {
-    if (state == null) {
-        Glass(PanelSizes.CONTROL_W, PanelSizes.CONTROL_H) {}
-        return
-    }
+internal fun FlyPage(state: DsUiState, onEvent: (Ui) -> Unit) {
     when (state.screen) {
-        Screen.WELCOME -> Glass(PanelSizes.CONTROL_W, PanelSizes.WELCOME_H) { Welcome(state, onEvent) }
-        Screen.PICKER -> Glass(PanelSizes.CONTROL_W, PanelSizes.PICKER_H) { Picker(state, onEvent) }
-        Screen.RESULT -> Glass(PanelSizes.CONTROL_W, if (state.outcomeLesson == LessonId.L6) PanelSizes.RESULT_L6_H else PanelSizes.RESULT_H) { Result(state, onEvent) }
-        Screen.SETTINGS -> Glass(PanelSizes.CONTROL_W, PanelSizes.CONTROL_MAX_H, padding = 12) { Settings(state, onEvent) }
-        Screen.EXIT_CONFIRM -> Glass(PanelSizes.CONTROL_W, PanelSizes.EXIT_H) { ExitConfirm(onEvent) }
-        else -> Glass(PanelSizes.CONTROL_W, PanelSizes.CONTROL_H) { Flight(state, onEvent) }
+        Screen.WELCOME -> Box(Modifier.fillMaxWidth().height(348.dp)) { Welcome(state, onEvent) }
+        Screen.RESULT -> Box(Modifier.fillMaxWidth().height((if (state.outcomeLesson == LessonId.L6) 328 else 288).dp)) { Result(state, onEvent) }
+        Screen.BLOCKED -> Box(Modifier.fillMaxWidth().height(PanelSizes.FLIGHT_H.dp)) { Blocked(state, onEvent) }
+        else ->
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Box(Modifier.fillMaxWidth().height(PanelSizes.FLIGHT_H.dp)) { Flight(state, onEvent) }
+                if (state.sticksVisible) SticksPad()
+            }
+    }
+}
+
+/** 科目 page of the main window (S04 picker). */
+@Composable
+internal fun LessonsPage(state: DsUiState, onEvent: (Ui) -> Unit) = Picker(state, onEvent)
+
+/** 设置 page of the main window (S11, S12 confirm inline at the bottom, D26). */
+@Composable
+internal fun SettingsPage(state: DsUiState, onEvent: (Ui) -> Unit) = Settings(state, onEvent)
+
+/** "打开面板" on the Stage (native-window-move §3.3): only while the main window is closed or minimised. */
+@Composable
+internal fun OpenChip(state: DsUiState?) {
+    Box(Modifier.size(PanelSizes.OPEN_W.dp, PanelSizes.OPEN_H.dp), contentAlignment = Alignment.Center) {
+        if (state == null) return@Box
+        Key(rs(R.string.open_panel), "open_panel", R.drawable.ic_open_with, KeyKind.PRIMARY, 56.dp) { io.embodit.dronesight.ui.window.WindowCtl.reopen("chip") }
     }
 }
 
@@ -317,9 +324,6 @@ private fun TitleRow(title: String, onEvent: (Ui) -> Unit, state: DsUiState, chi
         FitTitle(title, Modifier.weight(1f))
         chip?.invoke(if (chipWidth != null) Modifier.width(chipWidth) else Modifier)
         trailing?.invoke()
-        if (state.screen != Screen.STARTING && state.screen != Screen.BLOCKED) {
-            IconKey(R.drawable.ic_settings, rs(R.string.settings), "settings") { onEvent(Ui.OpenSettings) }
-        }
     }
 }
 
@@ -672,7 +676,7 @@ private fun Stepper(value: String, name: String, onMinus: () -> Unit, onPlus: ()
 
 private fun step(v: Float, d: Float, lo: Float, hi: Float): Float = ((v + d) * 100f).roundToInt().div(100f).coerceIn(lo, hi)
 
-/** Settings page (design panelContents.settingsPage): viewport 712, scrolls; "退出应用" is the last row (D26). */
+/** Settings page (design panelContents.settingsPage): scrolls in the window; language on top, "退出应用" last (D26). */
 @Composable
 private fun Settings(state: DsUiState, onEvent: (Ui) -> Unit) {
     val p = state.prefs
@@ -680,6 +684,13 @@ private fun Settings(state: DsUiState, onEvent: (Ui) -> Unit) {
     val scroll = rememberScrollState()
     val want = SettingsScroll.request
     val nonce = SettingsScroll.nonce
+    LaunchedEffect(state.screen) {
+        // the inline confirmation sits at the very bottom: keep it in view
+        if (state.screen == Screen.EXIT_CONFIRM) {
+            kotlinx.coroutines.delay(100)
+            scroll.animateScrollTo(scroll.maxValue)
+        }
+    }
     LaunchedEffect(want, nonce) {
         if (want < 0) return@LaunchedEffect
         // twice: the first composition does not know the content height yet
@@ -691,9 +702,12 @@ private fun Settings(state: DsUiState, onEvent: (Ui) -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(text = rs(R.string.set_title), style = DsType.title, color = PicoTheme.colorScheme.labelPrimary, modifier = Modifier.weight(1f), onTextLayout = fits("settings/title"))
-            Key(rs(R.string.done_btn), "settings_done", R.drawable.ic_check, KeyKind.PRIMARY, 48.dp) { onEvent(Ui.CloseSettings) }
         }
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(scroll).padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            // language first (D26: follows the system by default, switch here): 自动 = system, 中 / EN pin it, live
+            SetRow(R.drawable.ic_language, rs(R.string.set_lang)) {
+                Segments(listOf(Lang.SYSTEM to rs(R.string.lang_auto), Lang.ZH to rs(R.string.lang_zh), Lang.EN to rs(R.string.lang_en)), p.lang, "set_lang", 64) { l -> pr("lang") { it.copy(lang = l) } }
+            }
             // 1 volume: slider 0-100 % with low / mid / high snaps (30 / 60 / 90 ±5) + percent + mute
             var vol by remember(p.volume) { mutableFloatStateOf(p.volume.toFloat()) }
             SetRow(R.drawable.ic_volume_up, rs(R.string.set_volume), 56.dp) {
@@ -748,10 +762,6 @@ private fun Settings(state: DsUiState, onEvent: (Ui) -> Unit) {
                 Key(rs(R.string.replace), "set_replace", R.drawable.ic_open_with, KeyKind.NORMAL, 48.dp, Modifier.weight(1f)) { onEvent(Ui.Replace) }
                 Key(rs(R.string.recall), "set_recall", R.drawable.ic_my_location, KeyKind.NORMAL, 48.dp, Modifier.weight(1f)) { onEvent(Ui.RecallPanel) }
             }
-            SetRow(R.drawable.ic_language, rs(R.string.set_lang)) {
-                val zh = p.lang == Lang.ZH || (p.lang == Lang.SYSTEM && Locale.getDefault().language == "zh")
-                Segments(listOf(Lang.ZH to rs(R.string.lang_zh), Lang.EN to rs(R.string.lang_en)), if (zh) Lang.ZH else Lang.EN, "set_lang", 64) { l -> pr("lang") { it.copy(lang = l) } }
-            }
             if (!state.resetConfirm) {
                 SetRow(R.drawable.ic_restart_alt, rs(R.string.reset)) { Key(rs(R.string.reset), "reset", null, KeyKind.NORMAL, 48.dp) { onEvent(Ui.ResetAsk) } }
             } else {
@@ -767,7 +777,9 @@ private fun Settings(state: DsUiState, onEvent: (Ui) -> Unit) {
                 Text(text = rs(R.string.about_1), style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, onTextLayout = fits("settings/about_1"))
                 Text(text = rs(R.string.about_2), style = DsType.label, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, onTextLayout = fits("settings/about_2"))
             }
-            Key(rs(R.string.quit), "quit", R.drawable.ic_logout, KeyKind.DANGER, 52.dp, Modifier.fillMaxWidth()) { onEvent(Ui.QuitAsk) }
+            // D26: quit is always the last row; the confirmation opens right here (S12), no second panel
+            if (state.screen == Screen.EXIT_CONFIRM) ExitConfirm(onEvent)
+            else Key(rs(R.string.quit), "quit", R.drawable.ic_logout, KeyKind.DANGER, 52.dp, Modifier.fillMaxWidth()) { onEvent(Ui.QuitAsk) }
             Spacer(Modifier.height(16.dp))
         }
     }
@@ -791,10 +803,9 @@ private fun InvSwitch(label: String, on: Boolean, name: String, onChange: (Boole
 
 @Composable
 private fun ExitConfirm(onEvent: (Ui) -> Unit) {
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = rs(R.string.exit_title), style = DsType.title, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, modifier = Modifier.height(32.dp), onTextLayout = fits("exit/title"))
-        Text(text = rs(R.string.exit_body), style = DsType.body, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, onTextLayout = fits("exit/body"))
-        Spacer(Modifier.weight(1f))
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(DsColors.TagBg).padding(16.dp).probe("exit_confirm"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(text = rs(R.string.exit_title), style = DsType.title, color = DsColors.TagInk, maxLines = 2, onTextLayout = fits("exit/title"))
+        Text(text = rs(R.string.exit_body), style = DsType.body, color = DsColors.TagInk, maxLines = 1, onTextLayout = fits("exit/body"))
         Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Key(rs(R.string.cancel), "quit_cancel", null, KeyKind.NORMAL, 56.dp, Modifier.weight(1f)) { onEvent(Ui.QuitCancel) }
             Key(rs(R.string.exit_yes), "quit_yes", R.drawable.ic_logout, KeyKind.DANGER, 56.dp, Modifier.weight(1f)) { onEvent(Ui.QuitYes) }
@@ -802,13 +813,13 @@ private fun ExitConfirm(onEvent: (Ui) -> Unit) {
     }
 }
 
-// ================================================================================================= S13 blocked dialog
+// ================================================================================================= S13 blocked
 
+/** S13 in the main window (it used to be a dialog straight ahead on the Stage). */
 @Composable
-internal fun BlockedDialog(state: DsUiState?, onEvent: (Ui) -> Unit) {
-    Box(Modifier.size(PanelSizes.DIALOG_W.dp, PanelSizes.DIALOG_H.dp).clip(GlassShape).backgroundMaterial(enable = true, style = Material.Regular).then(glassRefresh())) {
-        if (state == null) return@Box
-        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+private fun Blocked(state: DsUiState, onEvent: (Ui) -> Unit) {
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(32.dp).clip(CircleShape).background(DsColors.Error), contentAlignment = Alignment.Center) {
                     Icon(painter = painterResource(R.drawable.ic_error), contentDescription = null, modifier = Modifier.size(24.dp), tint = DsColors.OnError)
@@ -857,17 +868,15 @@ private fun Int.sp() = androidx.compose.ui.unit.TextUnit(this.toFloat(), android
 // ================================================================================================= S14 virtual sticks
 
 /**
- * Two stick pads (panels.virtualSticks): press anywhere on a pad (ray + trigger, or a pinch) and drag; the offset /
- * 80 dp is the stick, clamped to 1; letting go springs back in 0.15 s. Custom element (no SpatialUI stick exists).
+ * Two stick pads (panels.virtualSticks), under the flight page in the main window: press anywhere on a pad (ray +
+ * trigger, or a pinch) and drag; the offset / 80 dp is the stick, clamped to 1; letting go springs back in 0.15 s.
+ * Custom element (no SpatialUI stick exists).
  */
 @Composable
-internal fun SticksPanel(state: DsUiState?) {
-    Box(Modifier.size(PanelSizes.STICKS_W.dp, PanelSizes.STICKS_H.dp).clip(GlassShape).backgroundMaterial(enable = true, style = Material.Regular).then(glassRefresh())) {
-        if (state == null) return@Box
-        Row(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            Pad(rs(R.string.pad_left), left = true)
-            Pad(rs(R.string.pad_right), left = false)
-        }
+private fun SticksPad() {
+    Row(Modifier.fillMaxWidth().height(PanelSizes.STICKS_H.dp).probe("sticks"), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+        Pad(rs(R.string.pad_left), left = true)
+        Pad(rs(R.string.pad_right), left = false)
     }
 }
 

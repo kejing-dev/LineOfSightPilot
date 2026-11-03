@@ -4,15 +4,16 @@
 
     python3 tools/render_audio.py [QA_DIR]
 
-rotor.wav  1.000 s seamless loop (built in the frequency domain: every partial is a whole number of cycles, so the loop
-           has no click); 200 Hz blade-pass + harmonics + band noise; the app changes its pitch with the throttle
-           (SoundPool rate 0.85-1.45 ~ 170-290 Hz) and its volume 40-100 %. Peak -6 dBFS.
+rotor      v0.1.2: synthesised live in the app (domain/RotorSynth.kt), no WAV. RotorSynthTest renders the 10 s QA
+           sample with the app's own code to app/build/outputs/rotor/rotor_10s.wav; this script copies it to QA_DIR
+           with a spectrogram (run `tools/dev.sh test` first). The v0.1.1 loop is still rendered as rotor_10s_v011.wav
+           for an A/B listen.
 ding.wav   in-box / gate / ring (two soft partials), -3 dBFS
 tick.wav   out of the box / wrong gate (short wood tick), -3 dBFS
 beep.wav   out of the field (two short beeps), -3 dBFS
 land.wav   soft landing "click", -3 dBFS
 thud.wav   hard landing (low thump), -3 dBFS
-spinup.wav rotor spin-up (0.8 s, rising), -6 dBFS
+(spinup.wav is gone in v0.1.2: the synth spins up with the flight model's rotor level.)
 """
 import os
 import sys
@@ -45,7 +46,8 @@ def write(path, x):
         w.writeframes(pcm.tobytes())
 
 
-def rotor():
+def rotor_v011():
+    """The v0.1.1 rotor loop (for the A/B sample only)."""
     n = SR  # 1 s loop: bin k = k Hz
     spec = np.zeros(n // 2 + 1, dtype=np.complex128)
     f0 = 200
@@ -125,7 +127,7 @@ def stats(x):
     return db(np.max(np.abs(x))), db(np.sqrt(np.mean(x ** 2)))
 
 
-def spectrogram(x, path, title):
+def spectrogram(x, path, title, sr=SR):
     from PIL import Image, ImageDraw
 
     win = 1024
@@ -139,7 +141,7 @@ def spectrogram(x, path, title):
             break
         s = np.abs(np.fft.rfft(seg * w))
         cols.append(20 * np.log10(s + 1e-6))
-    m = np.array(cols).T[:400]  # 0..~8.6 kHz
+    m = np.array(cols).T[: int(400 * SR / sr)]  # 0..~8.6 kHz
     m = np.clip((m - m.max() + 80) / 80, 0, 1)
     img = Image.fromarray((255 * m[::-1]).astype(np.uint8)).resize((800, 400))
     d = ImageDraw.Draw(img)
@@ -150,20 +152,22 @@ def spectrogram(x, path, title):
 def main():
     qa = sys.argv[1] if len(sys.argv) > 1 else None
     os.makedirs(OUT, exist_ok=True)
-    sounds = {"rotor": rotor(), "ding": ding(), "tick": tick(), "beep": beep(), "land": land(), "thud": thud(), "spinup": spinup()}
+    # rendered first, as in v0.1.1: keeps the random stream (so tick / land / thud) byte-identical
+    old_rotor = rotor_v011()
+    sounds = {"ding": ding(), "tick": tick(), "beep": beep(), "land": land(), "thud": thud()}
+    for gone in ("rotor", "spinup"):
+        old = os.path.join(OUT, f"{gone}.wav")
+        if os.path.exists(old):
+            os.remove(old)
     rows = []
     for name, x in sounds.items():
         write(os.path.join(OUT, f"{name}.wav"), x)
         p, r = stats(x)
         rows.append((name, len(x) / SR, p, r))
-    # seamless loop check: the jump from the last to the first sample vs the typical step
-    r = sounds["rotor"]
-    jump = abs(r[0] - r[-1])
-    step = np.median(np.abs(np.diff(r)))
-    print(f"rotor loop seam jump={jump:.4f} median step={step:.4f}")
     if qa:
         os.makedirs(qa, exist_ok=True)
-        # 10 s rotor as the app plays it: throttle ramps 0.4 -> 1.0 -> 0.5 (rate 0.85 -> 1.45 -> 0.95), gain 40-100 % x 60 %
+        # v0.1.1 for comparison: the 1 s loop rate-shifted by the throttle 0.4 -> 1.0 -> 0.5, gain 40-100 % x 60 %
+        r = old_rotor
         n = SR * 10
         t = np.arange(n) / SR
         thr = np.interp(t, [0, 4, 7, 10], [0.4, 1.0, 1.0, 0.5])
@@ -173,18 +177,35 @@ def main():
         frac = pos - i0
         y = r[i0] * (1 - frac) + r[(i0 + 1) % SR] * frac
         y *= (0.4 + 0.6 * (thr - 0.4) / 0.6) * 0.6
-        write(os.path.join(qa, "rotor_10s.wav"), y)
+        write(os.path.join(qa, "rotor_10s_v011.wav"), y)
         p, rr = stats(y)
-        rows.append(("rotor_10s (as played, 60 % volume)", 10.0, p, rr))
-        spectrogram(y, os.path.join(qa, "rotor_10s_spectrogram.png"), "rotor 10 s, throttle 0.4 -> 1.0 -> 0.5")
-        cues = np.concatenate([sounds[k] for k in ("spinup", "ding", "tick", "beep", "land", "thud")])
+        rows.append(("rotor_10s_v011 (old loop, 60 % volume)", 10.0, p, rr))
+        spectrogram(y, os.path.join(qa, "rotor_10s_v011_spectrogram.png"), "v0.1.1 rotor loop, throttle 0.4 -> 1.0 -> 0.5")
+        # v0.1.2: the app's own synth, rendered by RotorSynthTest
+        src = os.path.join(ROOT, "app", "build", "outputs", "rotor", "rotor_10s.wav")
+        if os.path.exists(src):
+            import shutil
+            shutil.copyfile(src, os.path.join(qa, "rotor_10s.wav"))
+            with wave.open(src, "rb") as w:
+                sr2 = w.getframerate()
+                st = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float64) / 32767
+            left = st[0::2]
+            p, rr = stats(st)
+            rows.append(("rotor_10s v0.1.2 synth (60 % volume, stereo)", len(left) / sr2, p, rr))
+            spectrogram(left, os.path.join(qa, "rotor_10s_spectrogram.png"), "v0.1.2 rotor synth (left), throttle 0.2 -> 0.4 -> 1.0 -> 0.5, 1.5 -> 6 -> 2 m", sr2)
+            note = os.path.join(ROOT, "app", "build", "outputs", "rotor", "rotor_10s.txt")
+            rotor_note = open(note, encoding="utf-8").read() if os.path.exists(note) else ""
+        else:
+            print("no app/build/outputs/rotor/rotor_10s.wav: run tools/dev.sh test first")
+            rotor_note = ""
+        cues = np.concatenate([sounds[k] for k in ("ding", "tick", "beep", "land", "thud")])
         write(os.path.join(qa, "cues.wav"), cues)
-        spectrogram(cues, os.path.join(qa, "cues_spectrogram.png"), "spinup / ding / tick / beep / land / thud")
+        spectrogram(cues, os.path.join(qa, "cues_spectrogram.png"), "ding / tick / beep / land / thud")
         with open(os.path.join(qa, "audio-levels.md"), "w", encoding="utf-8") as f:
             f.write("| 声音 | 时长 s | 峰值 dBFS | RMS dBFS |\n|---|---|---|---|\n")
             for name, dur, p, rr in rows:
                 f.write(f"| {name} | {dur:.2f} | {p:.1f} | {rr:.1f} |\n")
-            f.write(f"\nrotor 循环接缝跳变 {jump:.4f}（中位相邻差 {step:.4f}），频域构造，所有分量整周期，无咔哒。\n")
+            f.write("\nv0.1.2 螺旋桨声（RotorSynthTest 实测，应用同一份代码）：\n\n```\n" + rotor_note + "```\n")
     for name, dur, p, rr in rows:
         print(f"{name:40s} {dur:5.2f}s peak {p:6.1f} dBFS rms {rr:6.1f} dBFS")
 

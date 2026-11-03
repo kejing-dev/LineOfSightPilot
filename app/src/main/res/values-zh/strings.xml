@@ -48,6 +48,9 @@
     <string name="prev_cd">上一科</string>
     <string name="next_cd">下一科</string>
     <string name="settings">设置</string>
+    <string name="tab_fly">飞行</string>
+    <string name="tab_lessons">科目</string>
+    <string name="open_panel">打开面板</string>
     <string name="done_btn">好了</string>
     <string name="mute">静音</string>
     <string name="vsticks">虚拟摇杆</string>
@@ -173,6 +176,7 @@
     <string name="set_bigtag">大字高度牌</string>
     <string name="recall">叫回面板</string>
     <string name="set_lang">语言</string>
+    <string name="lang_auto">自动</string>
     <string name="lang_zh">中</string>
     <string name="lang_en">EN</string>
     <string name="reset">重置进度</string>

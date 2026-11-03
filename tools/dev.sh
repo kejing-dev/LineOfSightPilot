@@ -7,15 +7,28 @@
 #   tools/dev.sh log [REGEX] [LINES]  logcat, tag DroneSight
 #   tools/dev.sh crash                last crash lines
 #   tools/dev.sh shot NAME [DIR]      pico-cli screenshot -> DIR/NAME.png (default .scratch/shots)
-DEV=${DEV:-emulator-5556}
-AVD=${AVD:-PICO_6_1_kj-mbp_2}
 PKG=io.embodit.dronesight
 TAG=DroneSight
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-export JAVA_HOME="${JAVA_HOME:-$HOME/.pico/primer-cli/jdk/jdk-21.0.12.1+1/Contents/Home}"
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    # kj-alienware (Windows, Git Bash): primer JDK 21, the Windows trust store (the primer cacerts does not trust
+    # services.gradle.org), adb from the SDK. No emulator is pinned here: set DEV / AVD to the one state.json gives you.
+    DEV=${DEV:-}
+    AVD=${AVD:-}
+    export JAVA_HOME="$HOME/.pico/primer-cli/jdk/jdk-21.0.12.1+1"
+    export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:--Djavax.net.ssl.trustStoreType=WINDOWS-ROOT}"
+    export PATH="$JAVA_HOME/bin:$HOME/Android/Sdk/platform-tools:$PATH" ;;
+  *)
+    DEV=${DEV:-emulator-5556}
+    AVD=${AVD:-PICO_6_1_kj-mbp_2}
+    export JAVA_HOME="${JAVA_HOME:-$HOME/.pico/primer-cli/jdk/jdk-21.0.12.1+1/Contents/Home}" ;;
+esac
 mkdir -p "$ROOT/.scratch"
 
 check() {
+  if [ -z "$DEV" ]; then echo "no device: DEV=<serial> AVD=<avd> tools/dev.sh ..." >&2; exit 2; fi
+  case "$DEV" in emulator-*) ;; *) return 0 ;; esac   # a headset: no AVD to check
   avd="$(adb -s $DEV emu avd name 2>/dev/null | head -1 | tr -d '\r')"
   if [ "$avd" != "$AVD" ]; then echo "WRONG AVD on $DEV: '$avd' (expected $AVD)" >&2; exit 2; fi
 }

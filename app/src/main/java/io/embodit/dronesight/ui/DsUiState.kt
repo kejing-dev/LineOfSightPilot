@@ -15,6 +15,9 @@ enum class Screen { STARTING, WELCOME, FINDING_FLOOR, PLACING, PICKER, READY, FL
 
 enum class Lang { SYSTEM, ZH, EN }
 
+/** The main window's TabBar pages (v0.1.2). */
+enum class Tab { FLY, LESSONS, SETTINGS }
+
 enum class HintMode { ON, OFF, FIRST_TWO }
 
 enum class VStickMode { AUTO, ALWAYS, OFF }

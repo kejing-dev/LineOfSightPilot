@@ -37,27 +37,22 @@ fun rs(@StringRes id: Int): String = LocalDsResources.current.getString(id)
 fun rs(@StringRes id: Int, vararg args: Any): String = LocalDsResources.current.getString(id, *args)
 
 /**
- * Panel sizes (design panels[].sizeDp), dp; all at scale 0.75 (1 dp = 0.6 mm). The control panel is declared at its
- * tallest page (settings 712); each page draws its glass from the top edge down to its own height. Width 480 instead
- * of the design's 400 and the picker as one list (648 high): the English lesson names and taglines fit on one line
- * each (deviation, within tolerance; profile B19 "装不下就放大面板").
+ * Sizes, dp. v0.1.2: all 2D content is in ONE system Planar window (profile D8 / D21, native-window-move): the flight
+ * page with the stick pads under it and the nine-lesson list fit in 540 x 680 (B19); the window brings its own glass,
+ * 32-dp corners and the system caption bar (move / close / minimise). On the Stage only the height tag over the drone
+ * and the "打开面板" chip are left, both at scale 0.75 (1 dp = 0.6 mm).
  */
 object PanelSizes {
     const val SCALE = 0.75f
-    const val CONTROL_W = 480f
-    const val CONTROL_MAX_H = 712f
-    const val CONTROL_H = 308f
-    const val WELCOME_H = 380f
-    const val PICKER_H = 648f
-    const val RESULT_H = 320f
-    const val RESULT_L6_H = 360f
-    const val EXIT_H = 200f
-    const val STICKS_W = 480f
-    const val STICKS_H = 220f
+    const val WINDOW_W = 540f
+    const val WINDOW_H = 680f
+    /** The flight page's own part (title, mode / wind, keys, hint, toggles) above the stick pads. */
+    const val FLIGHT_H = 276f
+    const val STICKS_H = 200f
     const val TAG_W = 200f
     const val TAG_H = 84f
-    const val DIALOG_W = 400f
-    const val DIALOG_H = 220f
+    const val OPEN_W = 300f
+    const val OPEN_H = 88f
 }
 
 /** The two virtual stick pads (S14): written by the pads (main thread), read by the frame system. */

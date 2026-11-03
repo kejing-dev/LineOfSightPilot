@@ -6,24 +6,25 @@ import android.media.SoundPool
 import io.embodit.dronesight.domain.Touchdown
 
 /**
- * The app's sounds (design audio): offline-rendered WAVs in assets/sfx (tools/render_audio.py; rotor peak -6 dBFS, cues
- * -3 dBFS). The rotor is one seamless 1 s loop whose rate follows the throttle (pitch 170-290 Hz) and whose gain follows
- * it too (40-100 %). Master volume 0-100 % (default 60) and the mute switch on the panel (D15) scale everything.
+ * The app's sounds (design audio). Cues are offline-rendered WAVs in assets/sfx (tools/render_audio.py, -3 dBFS) on a
+ * SoundPool. The rotor is synthesised live ([RotorAudio] / [io.embodit.dronesight.domain.RotorSynth], v0.1.2, profile
+ * B20): pitch follows the throttle, slow random drift, four detuned rotors, low-pass and distance gain. Master volume
+ * 0-100 % (default 60) and the mute switch on the panel (D15) scale everything.
  */
 class Sound(private val context: Context) {
     private var pool: SoundPool? = null
     private val ids = HashMap<String, Int>()
-    private var rotorStream = 0
+    private var rotorAudio: RotorAudio? = null
     private var master = 0.6f
     private var muted = false
-    private var rotorGain = -1f
-    private var rotorRate = -1f
+    private var rotorLogMs = 0L
 
     fun start() {
         if (pool != null) return
         val p = SoundPool.Builder().setMaxStreams(6).setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()).build()
         pool = p
-        for (n in listOf("rotor", "ding", "tick", "beep", "land", "thud", "spinup")) {
+        rotorAudio = RotorAudio().also { it.start() }
+        for (n in listOf("ding", "tick", "beep", "land", "thud")) {
             runCatching { context.assets.openFd("sfx/$n.wav").use { fd -> ids[n] = p.load(fd, 1) } }.onFailure { DsLog.w("SOUND load $n failed: $it") }
         }
         DsLog.i("SOUND ready ${ids.keys}")
@@ -33,13 +34,13 @@ class Sound(private val context: Context) {
         runCatching { pool?.release() }
         pool = null
         ids.clear()
-        rotorStream = 0
+        runCatching { rotorAudio?.release() }
+        rotorAudio = null
     }
 
     fun setVolume(percent: Int, mute: Boolean) {
         master = (percent.coerceIn(0, 100) / 100f)
         muted = mute
-        rotorGain = -1f
         DsLog.i("SOUND volume=$percent muted=$mute")
     }
 
@@ -60,7 +61,8 @@ class Sound(private val context: Context) {
 
     fun beep() = play("beep", 0.7f)
 
-    fun spinUp() = play("spinup", 0.8f)
+    /** The synth spins the rotors up itself (pitch and level ramp with the flight model's rotor level). */
+    fun spinUp() = Unit
 
     fun takeoff() = Unit
 
@@ -69,34 +71,24 @@ class Sound(private val context: Context) {
     fun crash() = play("thud", 1f)
 
     /**
-     * Every frame: [level] 0 (off) .. 1 (full), [throttle] 0..1. Paused flights run at 30 % (design S15).
+     * Every frame: [level] 0 (off) .. 1 (full), [throttle] 0..1, [distM] head to drone, [pan] -1 (left) .. 1 (right).
+     * Paused flights run at 30 % (design S15).
      */
-    fun rotor(level: Float, throttle: Float) {
-        val p = pool ?: return
-        val id = ids["rotor"] ?: return
-        val g = if (level <= 0.02f) 0f else gain * level * (0.4f + 0.6f * throttle.coerceIn(0f, 1f))
-        val r = (0.85f + 0.6f * throttle.coerceIn(0f, 1f)).coerceIn(0.5f, 2f)
-        if (g <= 0f) {
-            if (rotorStream != 0) {
-                p.stop(rotorStream)
-                rotorStream = 0
-                rotorGain = -1f
-            }
-            return
-        }
-        if (rotorStream == 0) {
-            rotorStream = p.play(id, g, g, 2, -1, r)
-            rotorGain = g
-            rotorRate = r
-            return
-        }
-        if (kotlin.math.abs(g - rotorGain) > 0.01f) {
-            p.setVolume(rotorStream, g, g)
-            rotorGain = g
-        }
-        if (kotlin.math.abs(r - rotorRate) > 0.01f) {
-            p.setRate(rotorStream, r)
-            rotorRate = r
+    fun rotor(level: Float, throttle: Float, distM: Float = 2f, pan: Float = 0f) {
+        val ra = rotorAudio ?: return
+        val tg = ra.synth.targets
+        val wasOff = tg.level <= 0f
+        tg.throttle = throttle
+        tg.distM = distM
+        tg.pan = pan
+        tg.gain = gain
+        tg.level = if (level <= 0.02f) 0f else level
+        if (wasOff && tg.level > 0f) ra.poke()
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (tg.level > 0f && now - rotorLogMs >= 2000) {
+            rotorLogMs = now
+            val sy = ra.synth
+            DsLog.i(String.format(java.util.Locale.US, "SOUND rotor level=%.2f thr=%.2f dist=%.1f pan=%.2f base=%.0fHz drift=%+.1f%% voices=%s", level, throttle, distM, pan, sy.baseHz, sy.commonDrift * 100, sy.pitchHz.joinToString("/") { "%.0f".format(java.util.Locale.US, it) }))
         }
     }
 }

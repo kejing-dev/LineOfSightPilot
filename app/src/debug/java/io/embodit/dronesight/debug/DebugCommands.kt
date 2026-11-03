@@ -16,6 +16,9 @@ import io.embodit.dronesight.ui.Ui
 import io.embodit.dronesight.ui.components.SettingsScroll
 import io.embodit.dronesight.ui.components.VirtualSticks
 import io.embodit.dronesight.ui.debug.Probe
+import io.embodit.dronesight.ui.window.PANEL_ID
+import io.embodit.dronesight.ui.window.PANEL_TAG
+import io.embodit.dronesight.ui.window.WindowCtl
 
 /**
  * Debug builds only (QA hooks, design qaHooks). Every command goes through the same events as the panels
@@ -121,6 +124,13 @@ object DebugCommands {
                 "closeSettings" -> ev(Ui.CloseSettings)
                 "replace" -> ev(Ui.Replace)
                 "recall" -> ev(Ui.RecallPanel)
+                // v0.1.2 main window: the TabBar's own event, and the window's open / close as the chip / × do it
+                "tab" -> ev(Ui.Tab(when (arg) { "lessons" -> io.embodit.dronesight.ui.Tab.LESSONS; "settings" -> io.embodit.dronesight.ui.Tab.SETTINGS; else -> io.embodit.dronesight.ui.Tab.FLY }))
+                "window" -> when (arg) {
+                    "close" -> { WindowCtl.navigator?.closeWindowContainer(PANEL_ID, PANEL_TAG); "close sent, state=${WindowCtl.panelState}" }
+                    "open" -> { WindowCtl.reopen("debug"); "open sent, state=${WindowCtl.panelState}" }
+                    else -> "state=${WindowCtl.panelState} created=${WindowCtl.createdEpoch} dpM=${WindowCtl.dpM}"
+                }
                 "quitAsk" -> { if (DsController.state.value.screen != Screen.SETTINGS) DsController.onEvent(Ui.OpenSettings); ev(Ui.QuitAsk) }
                 "quitCancel" -> ev(Ui.QuitCancel)
                 "quitYes" -> ev(Ui.QuitYes)
@@ -266,7 +276,7 @@ object DebugCommands {
                 "instances" -> (sc?.logInstances() ?: emptyList()).joinToString(" | ")
                 "ftest" -> { sc?.debugFTest(arg != "off"); "ftest=${arg != "off"}" }
                 "bounds" -> {
-                    val panel = arg.ifEmpty { "control" }
+                    val panel = arg.ifEmpty { "window" }
                     val size = Probe.sizeOf(panel)
                     for ((name, b) in Probe.controlsOf(panel)) DsLog.i(String.format(java.util.Locale.US, "BOUNDS panel=%s name=%s cx=%.0f cy=%.0f w=%.0f h=%.0f panelPx=%s", panel, name, b.cx, b.cy, b.w, b.h, size))
                     "bounds $panel ${Probe.controlsOf(panel).size}"

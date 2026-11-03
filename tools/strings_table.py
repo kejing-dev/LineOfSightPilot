@@ -59,6 +59,10 @@ S = [
     ("prev_cd", "上一科", "Previous lesson"),
     ("next_cd", "下一科", "Next lesson"),
     ("settings", "设置", "Settings"),
+    # v0.1.2 main window: system TabBar pages (D21 / D8), the Stage chip that reopens a closed window
+    ("tab_fly", "飞行", "Fly"),
+    ("tab_lessons", "科目", "Lessons"),
+    ("open_panel", "打开面板", "Open panel"),
     ("done_btn", "好了", "Done"),
     ("mute", "静音", "Mute"),
     ("vsticks", "虚拟摇杆", "Stick pads"),
@@ -195,6 +199,7 @@ S = [
     ("set_bigtag", "大字高度牌", "Big height tag"),
     ("recall", "叫回面板", "Bring panel back"),
     ("set_lang", "语言", "Language"),
+    ("lang_auto", "自动", "Auto"),
     ("lang_zh", "中", "中"),
     ("lang_en", "EN", "EN"),
     ("reset", "重置进度", "Reset progress"),

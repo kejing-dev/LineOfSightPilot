@@ -4,10 +4,12 @@ A life-size 450 quadcopter takes off from a pad on your real living-room floor; 
 Mode 2 transmitter (left = throttle + yaw, right = pitch + roll) and you practise the multirotor VLOS test items: tail-in
 hover, nose-in hover, a slow 360, the horizontal figure eight, a spot landing, the full run, an ATTI hover, plus free
 flight and an endless waypoint run. PICO OS 6, Kotlin, PICO Spatial SDK 6.1.9, package `io.embodit.dronesight`.
-Skeleton D (passthrough anchor tool), container **STAGE_MIXED** (manifest `pico.spatial.stage.style=1`), window model
-`single_panel_with_popup`: control panel 480 × 308..712 dp (one panel, pages drawn from its top edge), virtual stick pads
-480 × 220, height tag 160 × 56 (200 × 72 big) over the drone, blocked dialog 400 × 220; all attachment panels at scale
-0.75 (1 dp = 0.6 mm). No WindowContainer, no permissions, no network.
+Skeleton D (passthrough anchor tool), container **STAGE_MIXED** (manifest `pico.spatial.stage.style=1`). Since v0.1.2
+(user on the headset + profile D8 / D21, factory snippet `prompts/snippets/native-window-move.md`) ALL 2D content is
+ONE system **Planar WindowContainer** `ControlPanel` (540 × 680 dp = 0.43 × 0.54 m, measured 0.8 mm / dp), opened by
+the Stage: pages switch with the system **TabBar** (飞行 / 科目 / 设置), the system caption bar under the window moves /
+closes / minimises it (no drag code in the app). On the Stage only the height tag over the drone (scale 0.75) and the
+"打开面板" chip (shown while the window is closed / minimised) are left. No permissions, no network.
 
 Design package (binding): `../../spatial-app-factory/apps/drone-sight/design-package.json` (17 states S00-S15 + S06a /
 S14 overlays, rules.flight / judge / courseGeometry, copy + `content.tone`). PRD
@@ -21,7 +23,7 @@ velocity-command model).
 
 ```
 app/src/main/java/io/embodit/dronesight/
-  Main.kt                  DefaultStage (Mixed) -> DsTheme -> DsScreen
+  Main.kt                  DefaultStage (Mixed) -> DsTheme -> DsScreen; WindowContainer ControlPanel -> DsWindow
   domain/                  pure Kotlin, JVM-tested (app/src/test)
     Flight.kt              FlightModel (GPS velocity command / ATTI acceleration + drag, wind, take-off, ceiling,
                            touch-down soft / heavy / hard), Wind (none / light / gusty, GPS sway)
@@ -31,22 +33,27 @@ app/src/main/java/io/embodit/dronesight/
     Waypoints.kt           F2 generator (seed = round), WaypointRing
     Calibration.kt         D25: the ONE place for the drone model's offset / rotation / scale
     Layout.kt              CourseFrame, placeUpright (the only head -> pose function, yaw only), Placement
-  platform/                DsLog (tag DroneSight), Store (prefs), Sound (assets/sfx), tracking/HeadTracker,
+  domain/RotorSynth.kt     v0.1.2 rotor sound (B20): 4 detuned voices, pitch = throttle, ±2.5 % slow random drift,
+                           slow AM, low-pass, distance gain, pan; JVM-tested (RotorSynthTest renders the QA sample)
+  platform/                DsLog (tag DroneSight), Store (prefs), Sound (cues assets/sfx + RotorAudio: AudioTrack
+                           thread playing RotorSynth), tracking/HeadTracker,
                            input/Controllers (sticks, trigger, A / X, ray), sense/FloorFinder (FLOOR, 5 s)
   ui/
     DsUiState.kt           Screen / Prefs / Hint / FlightSnap, designState() -> "S06+S06a+S14"
     DsController.kt        ALL behaviour: events (Ui.*) -> state, sessions, results, D27 adaptive leniency, quit (D26)
-    DsScreen.kt            wires controller, scene, panels; lifecycle (background -> S15, trackers stop)
+    DsScreen.kt            wires controller, scene, Stage panels; opens the main window; lifecycle (background -> S15)
+    window/                DsWindow (window content + WindowCtl: lifecycle, open / recall / chip, dp -> m),
+                           MainWindowTemplate (factory template: TabBar pages + Settings last, D26)
     scene/DroneScene.kt    ECS: build (resources on IO), floor, S03 ghost + lock, session stepping, drone pose,
-                           panel placement + grab bar, view-cone fades, logs, debug seams
+                           window pose estimate, tag / chip placement, view-cone fades, logs, debug seams
     scene/CourseView.kt    pad, hover box + progress, spin ring, poles, gates, path, rings, bounds, wind sock
     scene/DroneView.kt     root -> tilt -> calib (D25) -> quad_A.glb; blur discs, shadow + nose V, height line,
                            direction-hint arrows, landing offset line
     scene/PanelRig.kt      pre-built panel pool (Spatial Ruler findings)   scene/SceneKit.kt  meshes, materials, labels
-    components/            DsStage (SpatialView + 4 panels + tap / drag), Panels.kt (all pages), Strings.kt
+    components/            DsStage (SpatialView + tag + chip + tap), Panels.kt (all pages), Strings.kt
     theme/                 DsColors (the only colour literals), DsTheme (16 roles), DsTypography (Noto Sans / SC)
 app/src/debug/             DebugCommandReceiver + DebugCommands (QA hooks)
-app/src/main/assets/       quad_A.glb (design default A), sfx/*.wav (tools/render_audio.py)
+app/src/main/assets/       quad_A.glb (design default A), sfx/*.wav cues (tools/render_audio.py; no rotor WAV since v0.1.2)
 tools/                     dev.sh, strings_table.py (single source of copy), subset_cjk_font.py, render_audio.py,
                            make_icon.py + vector_render.py, contrast.py + contrast_samples.py, small.py
 ```
@@ -57,7 +64,15 @@ CalibrationTest: front red LEDs led45 / led135 at -Z). Yaw convention: + = turn 
 taps / debug hooks -> `DsController.onEvent`; the frame system steps `DsController.session` and reports events
 (`onSessionEvents`) and a few-times-a-second snapshot (`onSnap`); drone transforms never go through Compose.
 
-## Build, run (macOS, emulator-5556 / AVD PICO_6_1_kj-mbp_2 only; emulator-5554 belongs to another app)
+## Build, run
+
+`tools/dev.sh` works on both machines. macOS (kj-mbp): pinned to emulator-5556 / AVD PICO_6_1_kj-mbp_2. Windows
+(kj-alienware, Git Bash, since 2026-11-02): primer JDK 21, `JAVA_TOOL_OPTIONS=-Djavax.net.ssl.trustStoreType=WINDOWS-ROOT`,
+adb from `~/Android/Sdk`, `local.properties` = `sdk.dir=C:/Users/Admin/Android/Sdk` (forward slashes, not in git); no
+device is pinned: `DEV=<serial> AVD=<avd> tools/dev.sh …` with the emulator state.json gives you, or `DEV=PB324XJGL2090081G`
+for the headset (no AVD check). The headset sleeps within seconds when nobody wears it (frame loop stops, screencap is
+50 bytes): send `input keyevent KEYCODE_WAKEUP` every 2 s while driving it. A kj-mbp-signed install must be uninstalled
+before a kj-alienware build goes on.
 
 ```bash
 tools/dev.sh build && tools/dev.sh install && tools/dev.sh relaunch     # relaunch = force-stop + am start -W
@@ -66,7 +81,7 @@ tools/dev.sh log 'STATE|SESSION|RESULT|PLACE|CALIB' 60
 tools/dev.sh crash
 tools/dev.sh shot NAME [DIR]               # pico-cli capture screenshot (2160 px)
 python3 tools/strings_table.py && python3 tools/subset_cjk_font.py --source ~/Slides/Assets/Fonts/NotoSansSC-VariableFont_wght.ttf
-python3 tools/render_audio.py ../../spatial-app-factory/apps/drone-sight/qa    # sfx + 10 s rotor sample + spectrograms
+tools/dev.sh test && python3 tools/render_audio.py ../spatial-app-factory/apps/drone-sight/qa   # cues + rotor 10 s (v0.1.2 synth + v0.1.1 A/B) + spectrograms
 python3 tools/make_icon.py ../../spatial-app-factory/apps/drone-sight/icon.png
 python3 tools/contrast.py SHOTS_DIR --md OUT.md                               # D13 table (fixed pairs + screenshot samples)
 ```
@@ -99,11 +114,13 @@ flight sensors (factory rule 2026-10-29: no shortcut state writes). The emulator
 | `wind none|light|gusty|gust` `mode gps|atti` `tol lenient|standard` | panel segments; `gust` starts a gust now |
 | `speed K` `simulate S` `freeze 1|0` | time scale / fast-forward S seconds of the session / hold the flight still |
 | `waypoint seed N` `round N` `best L1 20` | F2 round N / set the round / inject a best score (picker chip) |
-| `settings [top|bottom]` `closeSettings` `replace` `recall` `quitAsk` `quitCancel` `quitYes` | S11 (scrolled) / done / 重摆场地 / 叫回面板 / S12 / quit |
+| `settings [top|bottom]` `closeSettings` `replace` `recall` `quitAsk` `quitCancel` `quitYes` | S11 (scrolled) / back / 重摆场地 / 叫回面板 (close + reopen the window) / S12 inline / quit |
+| `tab fly|lessons|settings` | the TabBar's own event (v0.1.2) |
+| `window [close|open]` | the window's state / close it as × does / the "打开面板" chip (restore if minimised) |
 | `lang zh|en|system` `mute on|off` `volume N` `poles M` `seated 1|0` `bigtag 1|0` | settings |
 | `nocontroller 1|0|auto` `vsticks` `hints` `block` `unblock` | controller presence as the provider would report it: 1 = none (pads auto, S01 / S03 no-controller copy), 0 = connected (with-controller copy, also on the emulator), auto = real / toggles / S13 |
 | `fit` `fit reset` | D13 text-fit summary: layouts checked, texts that overflowed (each also logs `OVERFLOW <panel>/<control>`) |
-| `view DEG` | emulator camera cannot turn: placements use the head turned DEG (+ = left); `view -38` = panel ahead |
+| `view DEG` | emulator camera cannot turn: placements (course, chip) use the head turned DEG (+ = left) |
 | `state S01..S15 | S06A` | macro of the above to reach a design state |
 | `where` `panels` `instances` `bounds PANEL` `dump` `ftest on|off` | diagnostics; `ftest` puts F↑ on the gate-1 tag ×3 (D10) |
 
@@ -135,13 +152,20 @@ Virtual pads end to end: `tools/pad_lesson.sh [OUTDIR]` (L1 with the pads only: 
 | S08 | after S07 (1.2 s); pass / near (`fly land off`) / retry (`fly crash`) |
 | S09 | `fly crash` |
 | S10 | `waypoint seed 7`, `takeoff` ; `fly gate 3` (rings use the same path macro) |
-| S11 | `settings` / `settings bottom` (退出应用 visible) ; `lang en` |
-| S12 | `quitAsk` |
-| S13 | `block` (dialog straight ahead; `unblock` -> S00) |
+| S11 | `settings` / `settings bottom` (退出应用 visible) ; `lang en` / `lang system` (语言 自动 / 中 / EN, first row) |
+| S12 | `quitAsk` (confirm opens inside the settings page, bottom) |
+| S13 | `block` (in the main window's 飞行 page; `unblock` -> S00) |
+| window | first frame: system window + TabBar on its left, caption dot under it ; hover the dot ; `window close` -> chip ; tap chip / `window open` ; `recall` (log ON_DESTROY -> ON_CREATE) |
 | S14 | `nocontroller 1` (pads auto) ; `vstick r 0.7,0.3` |
 | S15 | `fly hover`, `pause` |
 
 ## Platform facts found here
+
+- v0.1.2 main window (headset, 2026-11-02): `WINDOW lifecycle ON_CREATE / ON_START / ON_STOP` while the Stage is still
+  building, then `ON_START / ON_RESUME` ~4 s later; `LocalPhysicalLengthConverter` in the window gives 0.8 mm / dp (same
+  as the Stage's DP_M). The system puts the window ~1.75 m straight ahead; the app can neither read nor set its pose, so
+  `WINDOW estimate` (open-time head pose) is what the waypoint guard and the drone fade use. The default course is 16°
+  right / 3 m, clear of the window; the L4 left pole and F2 rings can still be behind it, then the user drags it away.
 
 - Emulator: `ControllerTrackingProvider.supportState` = `DEVICE_NOT_SUPPORTED` (no controllers) -> the virtual pads show
   automatically; the hardware stick path is only testable on the headset (design verification.deviceOnly).

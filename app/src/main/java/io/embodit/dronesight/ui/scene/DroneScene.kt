@@ -22,9 +22,7 @@ import com.pico.spatial.core.math.Color4
 import com.pico.spatial.core.math.Quat
 import com.pico.spatial.core.math.Vector3
 import com.pico.spatial.ui.foundation.content.SpatialViewAttachments
-import com.pico.spatial.ui.foundation.gesture.SpatialDragValue
 import com.pico.spatial.ui.foundation.gesture.SpatialTapValue
-import com.pico.spatial.ui.geometry.Offset3D
 import io.embodit.dronesight.domain.CourseFrame
 import io.embodit.dronesight.domain.RingGuard
 import io.embodit.dronesight.domain.CourseGeometry
@@ -54,6 +52,7 @@ import io.embodit.dronesight.ui.Lang
 import io.embodit.dronesight.ui.Screen
 import io.embodit.dronesight.ui.Ui
 import io.embodit.dronesight.ui.components.PanelSizes
+import io.embodit.dronesight.ui.window.WindowCtl
 import io.embodit.dronesight.ui.components.VirtualSticks
 import io.embodit.dronesight.ui.theme.DsColors
 import java.util.Locale
@@ -61,6 +60,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.hypot
+import kotlin.math.sin
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -84,11 +84,11 @@ class DroneFrameSystem : System() {
 }
 
 object PanelIds {
-    const val CONTROL = "control"
-    const val STICKS = "sticks"
+    /** The height tag over the drone (a reading that rides on the subject, native-window-move §6). */
     const val TAG = "tag"
-    const val DIALOG = "dialog"
-    val pool = listOf(CONTROL, STICKS, TAG, DIALOG)
+    /** "打开面板": shown only while the main window is closed / minimised (native-window-move §3.3). */
+    const val OPEN = "open"
+    val pool = listOf(TAG, OPEN)
 }
 
 /**
@@ -117,7 +117,6 @@ class DroneScene {
     private var drone: DroneView? = null
     private var floorRing: Entity? = null
     private var catcher: Entity? = null
-    private var grab: Entity? = null
     private var buildJob: Job? = null
     private var built = false
     private var modelReady = false
@@ -145,17 +144,11 @@ class DroneScene {
     private var courseWritten: CourseFrame? = null
     private var layoutJob: Job? = null
     private var sun: Entity? = null
-    private var grabWritten: Upright? = null
 
-    // panels
+    // the main window (a system window since v0.1.2: its pose is only estimated, see Placement.window)
     private var panelPose: Upright? = null
-    private var panelEpoch = -1
-    private var panelFacePoint: Vec3? = null
-    private var dialogPose: Upright? = null
-    private var dragStart: Vec3? = null
-    private var dragHand: Vec3 = Vec3.ZERO
-    private var dragging = false
-    private var panelFade = 1f
+    private var windowEpoch = -1
+    private var chipPose: Upright? = null
 
     // flight
     private var session: Session? = null
@@ -222,10 +215,8 @@ class DroneScene {
         stageRoot = root
         val rig = PanelRig(root) { id, shown -> panelShown[id] = shown }
         this.rig = rig
-        rig.world(PanelIds.CONTROL, PanelSizes.CONTROL_W, PanelSizes.CONTROL_MAX_H, PanelSizes.SCALE).maxPitch = 0f
-        rig.world(PanelIds.STICKS, PanelSizes.STICKS_W, PanelSizes.STICKS_H, PanelSizes.SCALE).maxPitch = 0.35f
         rig.world(PanelIds.TAG, PanelSizes.TAG_W, PanelSizes.TAG_H, PanelSizes.SCALE).maxPitch = 0f
-        rig.world(PanelIds.DIALOG, PanelSizes.DIALOG_W, PanelSizes.DIALOG_H, PanelSizes.SCALE).maxPitch = 0f
+        rig.world(PanelIds.OPEN, PanelSizes.OPEN_W, PanelSizes.OPEN_H, PanelSizes.SCALE).maxPitch = 0.45f
         head.start()
         controllers.start()
         ActiveScene.current = this
@@ -286,14 +277,6 @@ class DroneScene {
         root.addChild(c)
         c.enabled = false
         catcher = c
-        // the control panel's grab bar (D21: fixed + draggable): a pill above its top edge
-        val g = Entity().named("grab:control")
-        model(k.cube, k.frame, "grabBar", g).setLocal(scale = Vec3(0.08f, 0.008f, 0.008f))
-        g.components.set(CollisionComponent(collisionShape = listOf(ShapeResource.createBox(Vector3(0.18f, 0.045f, 0.04f))), physicsMaterial = PhysicsMaterialResource()))
-        g.components.set(InteractableComponent())
-        root.addChild(g)
-        g.enabled = false
-        grab = g
         built = true
         DsLog.i("SCENE built ms=${SystemClock.elapsedRealtime() - t0}")
         // the drone GLB (design default A)
@@ -478,7 +461,6 @@ class DroneScene {
         }
         blockSinceMs = -1L
         if (built && hasHead && now - headSinceMs > 300 && (modelReady || now - startMs > MODEL_WAIT_MS)) {
-            if (panelPose == null) placeControlPanel("first")
             DsController.onSceneReady()
         }
     }
@@ -748,17 +730,6 @@ class DroneScene {
             else -> 1f
         }
         dv.fade(alpha)
-        // the control panel fades to 35 % when the thing to watch is behind it (rules.viewConeCheck 2)
-        val watch = when {
-            sess == null -> null
-            sess.task == Task.EIGHT && sess.nextGate in 1..4 -> f.toStage(sess.course.gates[sess.nextGate - 1].at + Vec3(0f, 1.1f, 0f))
-            sess.task == Task.WAYPOINTS && sess.nextRing < sess.rings.size -> f.toStage(sess.rings[sess.nextRing].center)
-            else -> null
-        }
-        val behind = ui.screen == Screen.FLYING && (panelHit(stagePos)?.let { it > 0f } == true || (watch != null && panelHit(watch)?.let { it > 0f } == true))
-        val wantFade = if (behind) 0.35f else 1f
-        panelFade += (wantFade - panelFade) * (dt / 0.3f).coerceIn(0f, 1f)
-        rig?.get(PanelIds.CONTROL)?.switch?.setOpacity(if (abs(panelFade - 1f) < 0.01f) 1f else panelFade)
         // rotor sound
         val level = when (ui.screen) {
             Screen.READY, Screen.FLYING, Screen.LANDING -> fl?.rotor ?: 0f
@@ -766,7 +737,10 @@ class DroneScene {
             Screen.SETTINGS -> if (ui.back == Screen.PAUSED) 0.3f else 0f
             else -> 0f
         }
-        DsController.soundOrNull?.rotor(level, fl?.throttle ?: 0f)
+        // distance gain / low-pass and the bearing for the stereo pan (yaw + = left, so pan = -sin)
+        val toDrone = stagePos - pose.position
+        val bearing = Yaw.wrap(Yaw.of(Vec3(toDrone.x, 0f, toDrone.z)) - pose.yaw())
+        DsController.soundOrNull?.rotor(level, fl?.throttle ?: 0f, toDrone.length, -sin(bearing))
         // snapshot for the panels (only when it changes)
         if (sess != null) {
             val pr = sess.progress()
@@ -823,52 +797,50 @@ class DroneScene {
         val right = Vec3(-n.z, 0f, n.x)
         val local = hit - c
         val margin = t * 0.0875f // ~5°
-        val hw = PanelSizes.CONTROL_W * DP_M * PanelSizes.SCALE / 2 + margin
-        val hh = PanelSizes.CONTROL_H * DP_M * PanelSizes.SCALE / 2 + margin
+        val hw = PanelSizes.WINDOW_W * WindowCtl.dpM / 2 + margin
+        val hh = PanelSizes.WINDOW_H * WindowCtl.dpM / 2 + margin
         if (abs(local.dot(right)) > hw || abs(local.y) > hh) return null
         return dist - t
     }
 
-    /** Centre of the visible 308-dp part of the control panel. */
+    /** Centre of the main window (estimated). */
     private fun panelContentCenter(pp: Upright): Vec3 = pp.position
 
     // ------------------------------------------------------------------------------------------- panels
 
-    private fun placeControlPanel(why: String) {
-        val up = Placement.panel(placePose)
+    /**
+     * The system opened (or re-opened) the main window: it appears straight ahead of the head at ~1.75 m. Keep that as
+     * the window's estimated pose for the waypoint guard and the drone fade (the app cannot read the window's pose; a
+     * system drag after this is not seen).
+     */
+    private fun estimateWindow(why: String) {
+        val up = Placement.window(pose)
         panelPose = up
-        panelFacePoint = pose.position
-        DsLog.i(String.format(Locale.US, "PANEL place why=%s at=%s yaw=%.1f head=%s headYaw=%.1f pitch=%.1f", why, DsLog.pos(up.position), Math.toDegrees(up.yaw.toDouble()), DsLog.pos(pose.position), Math.toDegrees(pose.yaw(0f).toDouble()), Math.toDegrees(pose.pitch.toDouble())))
+        DsLog.i(String.format(Locale.US, "WINDOW estimate why=%s at=%s yaw=%.1f head=%s headYaw=%.1f pitch=%.1f size=%.2fx%.2f m", why, DsLog.pos(up.position), Math.toDegrees(up.yaw.toDouble()), DsLog.pos(pose.position), Math.toDegrees(pose.yaw(0f).toDouble()), Math.toDegrees(pose.pitch.toDouble()), PanelSizes.WINDOW_W * WindowCtl.dpM, PanelSizes.WINDOW_H * WindowCtl.dpM))
     }
 
     private fun placePanels(ui: DsUiState, now: Long) {
         val rig = rig ?: return
-        if (ui.panelEpoch != panelEpoch && hasHead) {
-            val recall = panelEpoch >= 0
-            if (recall || panelPose == null) placeControlPanel(if (panelEpoch < 0) "first" else "recall")
-            panelEpoch = ui.panelEpoch
-            if (recall) DsController.onPanelMoved("recall")
+        if (WindowCtl.createdEpoch != windowEpoch && hasHead) {
+            val again = windowEpoch >= 0
+            windowEpoch = WindowCtl.createdEpoch
+            if (windowEpoch > 0) {
+                estimateWindow(if (again) "reopen" else "first")
+                DsController.onPanelMoved("window")
+            }
         }
-        val pp = panelPose ?: return
-        // the slot is 712 dp tall and drawn from its top edge: the design centre is the centre of the 308-dp page
-        val m = DP_M * PanelSizes.SCALE
-        val drop = (PanelSizes.CONTROL_MAX_H - PanelSizes.CONTROL_H) / 2f * m
-        val control = rig[PanelIds.CONTROL]
-        control?.facePoint = panelFacePoint
-        showAt(PanelIds.CONTROL, pp.position - Vec3(0f, drop, 0f))
-        // grab bar 2 cm above the top edge
-        if (grabWritten != pp) grab?.let { g ->
-            grabWritten = pp
-            g.on(true)
-            g.setLocal(position = pp.position + Vec3(0f, PanelSizes.CONTROL_H / 2f * m + 0.025f, 0f), rotation = Quat4.axisAngle(Vec3.UP, control?.facing?.yaw ?: pp.yaw))
+        // "打开面板" while the window is closed or minimised: posed once from the head when it appears (D9), upright
+        if (WindowCtl.chipWanted(now) && ui.screen != Screen.STARTING) {
+            val c = chipPose ?: Placement.openChip(placePose).also {
+                chipPose = it
+                DsLog.i("CHIP show at=${DsLog.pos(it.position)} window=${WindowCtl.panelState}")
+            }
+            showAt(PanelIds.OPEN, c.position)
+            rig[PanelIds.OPEN]?.facePoint = pose.position
+        } else if (chipPose != null) {
+            chipPose = null
+            rig[PanelIds.OPEN]?.hide()
         }
-        // stick pads under the panel's 308-dp page, 0.15 m closer, tilted up (they turn to the head, pitch <= 20°)
-        if (ui.sticksVisible && liteOn("sticks")) {
-            val toHead = Vec3(pose.position.x - pp.position.x, 0f, pose.position.z - pp.position.z).normalized()
-            val y = pp.position.y - PanelSizes.CONTROL_H / 2f * m - 0.06f - PanelSizes.STICKS_H / 2f * m
-            showAt(PanelIds.STICKS, Vec3(pp.position.x, y, pp.position.z) + toHead * 0.15f)
-            rig[PanelIds.STICKS]?.facePoint = panelFacePoint
-        } else rig[PanelIds.STICKS]?.hide()
         // height tag over the drone (yaw-only billboard)
         val f = frame
         val sess = session
@@ -877,16 +849,7 @@ class DroneScene {
             showAt(PanelIds.TAG, f.toStage(sess.flight.pos + Vec3(0f, 0.19f + 0.35f, 0f)))
             rig[PanelIds.TAG]?.facePoint = null
         } else rig[PanelIds.TAG]?.hide()
-        // blocked dialog straight ahead
-        if (ui.screen == Screen.BLOCKED) {
-            val d = dialogPose ?: Placement.dialog(placePose).also { dialogPose = it }
-            showAt(PanelIds.DIALOG, d.position)
-            rig[PanelIds.DIALOG]?.facePoint = pose.position
-            courseRoot?.enabled = false
-        } else {
-            dialogPose = null
-            rig[PanelIds.DIALOG]?.hide()
-        }
+        if (ui.screen == Screen.BLOCKED) courseRoot?.enabled = false
     }
 
     private fun showAt(id: String, at: Vec3) {
@@ -905,38 +868,6 @@ class DroneScene {
             ghostTarget = Placement.courseAt(stage, pose, floorY)
             ghost = ghost?.copy(origin = Vec3(ghostTarget!!.x, floorY, ghostTarget!!.z))
             DsController.onEvent(Ui.PlaceHere)
-        }
-    }
-
-    fun onSpatialDrag(phase: String, start: Offset3D?, value: SpatialDragValue) {
-        when (phase) {
-            "start" -> {
-                val name = runCatching { value.targetEntity?.getName() }.getOrNull() ?: "none"
-                dragging = name == "grab:control" && panelPose != null
-                dragStart = panelPose?.position
-                dragHand = Vec3.ZERO
-                DsLog.i("DRAG start target=$name panel=$dragging")
-            }
-            "move" -> {
-                if (!dragging) return
-                val a = value.dragAmount
-                val moved = toStage(a.x, a.y, a.z) ?: return
-                val origin = toStage(0f, 0f, 0f) ?: return
-                dragHand = moved - origin
-                val s = dragStart ?: return
-                // hand travel x 1.6 (the panel is about twice as far as the hand)
-                val p = s + dragHand * 1.6f
-                panelPose = panelPose?.copy(position = p)
-            }
-            "end", "cancel" -> {
-                if (!dragging) return
-                dragging = false
-                // released: stays where it is (no snapping, no gravity), turns once to face you (D21)
-                panelPose?.let { pp -> panelPose = Upright(pp.position, faceYawOf(pp.position)) }
-                panelFacePoint = pose.position
-                DsLog.i("DRAG end panel=${DsLog.pos(panelPose?.position)}")
-                DsController.onPanelMoved("drag")
-            }
         }
     }
 
@@ -1006,7 +937,6 @@ class DroneScene {
         line("hoverBox", cr.findEntity("hoverBox"))
         line("poleL", cr.findEntity("poleL"))
         line("drone", cr.findEntity("drone"))
-        line("grab", grab)
         out.forEach { DsLog.i(it) }
         return out
     }
@@ -1083,8 +1013,8 @@ class DroneScene {
         val f = frame ?: return null
         val pp = panelPose ?: return null
         if (!hasHead) return null
-        val m = DP_M * PanelSizes.SCALE
-        return RingGuard.of(f, pose.position, pp, PanelSizes.CONTROL_W * m, PanelSizes.CONTROL_H * m, PanelSizes.STICKS_W * m, PanelSizes.STICKS_H * m)
+        // the stick pads are inside the window since v0.1.2: no second block under it
+        return RingGuard.of(f, pose.position, pp, PanelSizes.WINDOW_W * WindowCtl.dpM, PanelSizes.WINDOW_H * WindowCtl.dpM, 0f, 0f, padGap = 0f, padAhead = 0f)
     }
 
     fun debugFTest(on: Boolean) {

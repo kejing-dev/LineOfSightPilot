@@ -24,6 +24,10 @@ import io.embodit.dronesight.platform.Sound
 import io.embodit.dronesight.platform.Store
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
+import kotlin.system.exitProcess
+import io.embodit.dronesight.ui.window.WindowCtl
 
 /** Everything the user (or a debug hook, through the same events) can do. */
 sealed class Ui {
@@ -44,6 +48,8 @@ sealed class Ui {
     object CloseSettings : Ui()
     object Replace : Ui()
     object RecallPanel : Ui()
+    /** A TabBar item of the main window (v0.1.2). */
+    data class Tab(val tab: io.embodit.dronesight.ui.Tab) : Ui()
     object Retry : Ui()
     object Next : Ui()
     object ToPicker : Ui()
@@ -322,6 +328,7 @@ object DsController {
                 set("replace") { it.copy(screen = Screen.PLACING, replaceFrom = from, hint = placingHint(it)) }
             }
             Ui.RecallPanel -> set("recall") { it.copy(panelEpoch = it.panelEpoch + 1) }
+            is Ui.Tab -> onTab(e.tab, s)
             Ui.Retry -> if (s.screen == Screen.RESULT) newSession(s.outcomeLesson, "retry")
             Ui.Next -> if (s.screen == Screen.RESULT) {
                 val n = if (s.outcomeLesson == LessonId.F2) LessonId.F2 else s.outcomeLesson.next()
@@ -441,15 +448,64 @@ object DsController {
         set("prefs $why") { it.copy(prefs = after) }
     }
 
+    /**
+     * The main window's TabBar (v0.1.2): 飞行 / 科目 / 设置 map onto the existing screens; a tap that has nowhere to go
+     * yet (科目 before the course is placed) does nothing, so the tab stays where it is.
+     */
+    private fun onTab(tab: Tab, s: DsUiState) {
+        DsLog.i("TAB $tab screen=${s.screen}")
+        when (tab) {
+            Tab.SETTINGS -> if (s.screen != Screen.SETTINGS && s.screen != Screen.EXIT_CONFIRM) onEvent(Ui.OpenSettings)
+            Tab.FLY -> when (s.screen) {
+                Screen.EXIT_CONFIRM -> {
+                    onEvent(Ui.QuitCancel)
+                    onTab(tab, _state.value)
+                }
+                Screen.SETTINGS -> {
+                    onEvent(Ui.CloseSettings)
+                    if (_state.value.screen == Screen.PICKER) onEvent(Ui.Pick(_state.value.lesson))
+                }
+                Screen.PICKER -> onEvent(Ui.Pick(s.lesson))
+                else -> Unit
+            }
+            Tab.LESSONS -> when (s.screen) {
+                Screen.EXIT_CONFIRM -> {
+                    onEvent(Ui.QuitCancel)
+                    onTab(tab, _state.value)
+                }
+                Screen.SETTINGS -> if (s.back == Screen.PICKER || s.back == Screen.READY || s.back == Screen.RESULT || s.back == Screen.PAUSED) {
+                    onEvent(Ui.CloseSettings)
+                    onTab(tab, _state.value)
+                }
+                // a flight in the air ends (the drone goes back on the pad), like 重摆场地 does
+                Screen.READY, Screen.RESULT, Screen.FLYING, Screen.PAUSED -> {
+                    session = null
+                    set("tab lessons") { it.copy(screen = Screen.PICKER, hint = Hint.NONE) }
+                }
+                else -> Unit
+            }
+        }
+    }
+
+    /** D26 exit, same order as the factory template: release, close the window and the Stage, remove the tasks, end. */
     private fun quit() {
-        DsLog.i("EXIT confirmed")
+        DsLog.i("EXIT confirmed: release + close window + closeStage + finishAndRemoveTask + exit")
         session = null
         sound?.release()
         sound = null
         quitHook?.invoke()
+        WindowCtl.closeForQuit()
+        val nav = WindowCtl.navigator
         val a = activity
-        runCatching { a?.finishAndRemoveTask() }
-        main.postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 300)
+        MainScope().launch {
+            runCatching { nav?.closeStage() }.onFailure { DsLog.w("EXIT closeStage: $it") }
+            runCatching {
+                val am = a?.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+                am?.appTasks?.forEach { runCatching { it.finishAndRemoveTask() } }
+                a?.finishAndRemoveTask()
+            }.onFailure { DsLog.w("EXIT finishAndRemoveTask: $it") }
+            main.postDelayed({ exitProcess(0) }, 400)
+        }
     }
 
     /**

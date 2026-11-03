@@ -107,6 +107,18 @@ object Placement {
     fun panel(head: HeadPose): Upright = placeUpright(head, PANEL_YAW_DEG, PANEL_DIST_M, PANEL_DOWN_DEG)
 
     fun dialog(head: HeadPose): Upright = placeUpright(head, 0f, DIALOG_DIST_M, DIALOG_DOWN_DEG)
+
+    /**
+     * v0.1.2: where the system opens the main window (native-window-move §4, seen on the emulator): straight ahead of
+     * the head at about 1.75 m, centred on the line of sight. Only an estimate (the app cannot read or set a window's
+     * pose, and the user may drag it): used to keep waypoint rings out of it and to fade the drone in front of it.
+     */
+    const val WINDOW_DIST_M = 1.75f
+
+    fun window(head: HeadPose): Upright = placeUpright(head, 0f, WINDOW_DIST_M, 0f)
+
+    /** The "open panel" chip on the Stage when the window is closed: 20° right, 0.9 m, 25° down (beside the course). */
+    fun openChip(head: HeadPose): Upright = placeUpright(head, -20f, 0.9f, 25f)
 }
 
 /** Panel facing helper: the yaw (Yaw convention) of a panel at [panel] whose face (+Z) turns to [viewer]. */

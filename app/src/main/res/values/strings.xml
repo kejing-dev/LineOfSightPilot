@@ -48,6 +48,9 @@
     <string name="prev_cd">Previous lesson</string>
     <string name="next_cd">Next lesson</string>
     <string name="settings">Settings</string>
+    <string name="tab_fly">Fly</string>
+    <string name="tab_lessons">Lessons</string>
+    <string name="open_panel">Open panel</string>
     <string name="done_btn">Done</string>
     <string name="mute">Mute</string>
     <string name="vsticks">Stick pads</string>
@@ -173,6 +176,7 @@
     <string name="set_bigtag">Big height tag</string>
     <string name="recall">Bring panel back</string>
     <string name="set_lang">Language</string>
+    <string name="lang_auto">Auto</string>
     <string name="lang_zh">中</string>
     <string name="lang_en">EN</string>
     <string name="reset">Reset progress</string>
