@@ -22,6 +22,7 @@ class DebugCommandReceiver : BroadcastReceiver() {
         val a = intent.getStringExtra("a")
         DsLog.i("CMD recv '$cmd' s='$s'")
         // broadcasts arrive on the main thread, which is where the controller and the scene live
-        DebugCommands.run(context.applicationContext, cmd, s, a)
+        // a malformed command (e.g. `lesson` with no id) logs instead of taking the app down
+        runCatching { DebugCommands.run(context.applicationContext, cmd, s, a) }.onFailure { DsLog.w("CMD $cmd failed: $it") }
     }
 }

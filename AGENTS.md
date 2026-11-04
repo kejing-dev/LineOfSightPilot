@@ -33,6 +33,7 @@ app/src/main/java/io/embodit/dronesight/
     Waypoints.kt           F2 generator (seed = round), WaypointRing
     Calibration.kt         D25: the ONE place for the drone model's offset / rotation / scale
     Layout.kt              CourseFrame, placeUpright (the only head -> pose function, yaw only), Placement
+    LevelGate.kt           v0.1.3 D9: the main window opens only while the head is level (|pitch| <= 10° for 300 ms)
   domain/RotorSynth.kt     v0.1.2 rotor sound (B20): 4 detuned voices, pitch = throttle, ±2.5 % slow random drift,
                            slow AM, low-pass, distance gain, pan; JVM-tested (RotorSynthTest renders the QA sample)
   platform/                DsLog (tag DroneSight), Store (prefs), Sound (cues assets/sfx + RotorAudio: AudioTrack
@@ -156,11 +157,19 @@ Virtual pads end to end: `tools/pad_lesson.sh [OUTDIR]` (L1 with the pads only: 
 | S12 | `quitAsk` (confirm opens inside the settings page, bottom) |
 | S13 | `block` (in the main window's 飞行 page; `unblock` -> S00) |
 | window | first frame: system window + TabBar on its left, caption dot under it ; hover the dot ; `window close` -> chip ; tap chip / `window open` ; `recall` (log ON_DESTROY -> ON_CREATE) |
+| D9 window | cold start level / head down 30° / head up 30° (emulator: right-drag 801 fb px = 30°, `where` prints the pitch): pitched -> NO window + "平视前方 / Look straight ahead" on the line of sight (`LEVEL hint=true`), level again -> window opens upright (`LEVEL ok … -> open`) ; `recall` while pitched waits the same way |
 | S14 | `nocontroller 1` (pads auto) ; `vstick r 0.7,0.3` |
 | S15 | `fly hover`, `pause` |
 
 ## Platform facts found here
 
+- v0.1.3 window pitch (QA #4 q4-3): the system opens a Planar window on the line of sight and square to it, head pitch
+  included, and nothing can re-level it (Planar has no `volumeAlignment`, `windowConstraints` is size only, no pose API).
+  So `WindowCtl.openWindow` only ASKS; `DroneScene` feeds the head pitch every frame (`WindowCtl.stepGate`) and the
+  window opens once |pitch| <= 10° for 300 ms (`domain/LevelGate`); meanwhile the "打开面板" Stage slot shows
+  "平视前方 / 面板就出来" on the line of sight. Fallbacks: no valid head pose for 5 s of frames, or no Stage frame (15 s
+  before the first one, 3 s after). On the headset the Stage's first frame comes ~6 s after the ask: never time a
+  fallback from the ask alone. Factory write-up: native-window-move.md §7.9.
 - v0.1.2 main window (headset, 2026-11-02): `WINDOW lifecycle ON_CREATE / ON_START / ON_STOP` while the Stage is still
   building, then `ON_START / ON_RESUME` ~4 s later; `LocalPhysicalLengthConverter` in the window gives 0.8 mm / dp (same
   as the Stage's DP_M). The system puts the window ~1.75 m straight ahead; the app can neither read nor set its pose, so

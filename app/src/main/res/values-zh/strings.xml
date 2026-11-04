@@ -51,6 +51,8 @@
     <string name="tab_fly">飞行</string>
     <string name="tab_lessons">科目</string>
     <string name="open_panel">打开面板</string>
+    <string name="look_level">平视前方</string>
+    <string name="look_level_2">面板就出来</string>
     <string name="done_btn">好了</string>
     <string name="mute">静音</string>
     <string name="vsticks">虚拟摇杆</string>
@@ -184,7 +186,7 @@
     <string name="reset_yes">清掉</string>
     <string name="cancel">取消</string>
     <string name="about">关于</string>
-    <string name="about_1">v0.1.1 · 科目名对照 CAAC 多旋翼视距内实践考试，场地按客厅缩放</string>
+    <string name="about_1">v0.1.3 · 科目名对照 CAAC 多旋翼视距内实践考试，场地按客厅缩放</string>
     <string name="about_2">练手感用的，不是培训课时，不能替代报名考试</string>
     <string name="quit">退出应用</string>
     <string name="exit_title">退出视距飞手？</string>

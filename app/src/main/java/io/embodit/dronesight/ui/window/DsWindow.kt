@@ -21,6 +21,7 @@ import com.pico.spatial.ui.platform.LengthUnit
 import com.pico.spatial.ui.platform.LocalPhysicalLengthConverter
 import com.pico.spatial.ui.platform.containers.SpatialNavigator
 import io.embodit.dronesight.R
+import io.embodit.dronesight.domain.LevelGate
 import io.embodit.dronesight.platform.DsLog
 import io.embodit.dronesight.ui.DsController
 import io.embodit.dronesight.ui.Screen
@@ -63,18 +64,77 @@ object WindowCtl {
     private var recallPending = false
     private var askedAtMs = 0L
 
+    /**
+     * D9 (QA #4 q4-3): the system opens the window square to the line of sight, head pitch included, and nothing can
+     * re-level it afterwards; so every open (first, chip, recall) waits here for a level head. The Stage steps it each
+     * frame ([stepGate]) and shows "平视前方" while [levelHint] is on.
+     */
+    private val gate = LevelGate()
+    private var lastStepMs = 0L
+
+    /** The Stage's "平视前方 / Look straight ahead" hint: an open waits and the head is not level. */
+    var levelHint by mutableStateOf(false)
+        private set
+
     val open: Boolean
         get() = panelState != "never" && panelState != "ON_DESTROY" && panelState != "ON_STOP"
 
     /** The Stage shows "打开面板" while the window is closed / minimised, or never came up within 8 s of asking. */
     fun chipWanted(now: Long): Boolean =
-        when (panelState) {
+        if (gate.waiting) false
+        else when (panelState) {
             "ON_DESTROY", "ON_STOP" -> !recallPending
             "never" -> askedAtMs > 0 && now - askedAtMs > 8000
             else -> false
         }
 
+    /** Ask for the window: it opens once the head is level (or at once when the Stage sends no frames, [watchdog]). */
     fun openWindow(why: String) {
+        val now = SystemClock.elapsedRealtime()
+        DsLog.i("WINDOW ask why=$why state=$panelState (opens when the head is level)")
+        gate.ask(why, now)
+        main.removeCallbacks(watchdog)
+        main.postDelayed(watchdog, WATCHDOG_MS)
+    }
+
+    /** One Stage frame: [pitchDeg] = head pitch (+ up), null while the head pose is not valid yet. */
+    fun stepGate(now: Long, pitchDeg: Float?) {
+        lastStepMs = now
+        if (!gate.waiting) {
+            if (levelHint) levelHint = false
+            return
+        }
+        val hint = gate.hintWanted(pitchDeg)
+        if (hint != levelHint) {
+            levelHint = hint
+            DsLog.i(String.format(java.util.Locale.US, "LEVEL hint=%s pitch=%.1f waited=%d ms", hint, pitchDeg ?: Float.NaN, gate.waitedMs(now)))
+        }
+        val why = gate.step(now, pitchDeg) ?: return
+        levelHint = false
+        DsLog.i(String.format(java.util.Locale.US, "LEVEL ok pitch=%.1f -> open", pitchDeg ?: Float.NaN))
+        openNow(why)
+    }
+
+    /**
+     * No Stage frames for a while: do not hold the window back. Before the first frame that is [FIRST_FRAME_MS] after
+     * the ask (headset cold start: the Stage's frames start ~6 s after launch); after it, [WATCHDOG_MS] without one.
+     */
+    private val watchdog =
+        object : Runnable {
+            override fun run() {
+                if (!gate.waiting) return
+                val now = SystemClock.elapsedRealtime()
+                val stalled = if (lastStepMs == 0L) gate.waitedMs(now) > FIRST_FRAME_MS else now - lastStepMs > WATCHDOG_MS
+                if (stalled) {
+                    val why = gate.pending ?: return
+                    gate.cancel()
+                    levelHint = false
+                    openNow("$why/noframes")
+                } else main.postDelayed(this, WATCHDOG_MS)
+            }
+        }
+
+    private fun openNow(why: String) {
         val nav = navigator ?: return DsLog.w("WINDOW open why=$why: no navigator")
         askedAtMs = SystemClock.elapsedRealtime()
         DsLog.i("WINDOW open why=$why state=$panelState")
@@ -115,8 +175,13 @@ object WindowCtl {
     /** Quit: close the window first (it would otherwise outlive the Stage in the Shared Space, §7.7). */
     fun closeForQuit() {
         recallPending = false
+        gate.cancel()
+        levelHint = false
         runCatching { navigator?.closeWindowContainer(PANEL_ID, PANEL_TAG) }
     }
+
+    private const val WATCHDOG_MS = 3000L
+    private const val FIRST_FRAME_MS = 15000L
 }
 
 /** Which TabBar page shows for a controller screen. */

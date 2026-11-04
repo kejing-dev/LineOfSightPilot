@@ -45,7 +45,7 @@ internal fun DsStage(state: DsUiState, scene: DroneScene) {
             @Suppress("UNUSED_EXPRESSION") bindTick
             scene.bindPanels(attachments)
         },
-        initial = { content, attachments -> scene.attach(content, attachments) },
+        initial = { content, attachments -> scene.attach(content, attachments, context) },
     )
 }
 

@@ -51,6 +51,8 @@
     <string name="tab_fly">Fly</string>
     <string name="tab_lessons">Lessons</string>
     <string name="open_panel">Open panel</string>
+    <string name="look_level">Look straight ahead</string>
+    <string name="look_level_2">and the panel opens</string>
     <string name="done_btn">Done</string>
     <string name="mute">Mute</string>
     <string name="vsticks">Stick pads</string>
@@ -184,7 +186,7 @@
     <string name="reset_yes">Clear</string>
     <string name="cancel">Cancel</string>
     <string name="about">About</string>
-    <string name="about_1">v0.1.1 · Lesson names follow the CAAC multirotor VLOS test, scaled to a living room</string>
+    <string name="about_1">v0.1.3 · Lesson names follow the CAAC multirotor VLOS test, scaled to a living room</string>
     <string name="about_2">For practice only. Not training hours, not a substitute for the real test</string>
     <string name="quit">Quit app</string>
     <string name="exit_title">Quit Line-of-Sight Pilot?</string>

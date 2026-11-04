@@ -308,6 +308,14 @@ internal fun SettingsPage(state: DsUiState, onEvent: (Ui) -> Unit) = Settings(st
 internal fun OpenChip(state: DsUiState?) {
     Box(Modifier.size(PanelSizes.OPEN_W.dp, PanelSizes.OPEN_H.dp), contentAlignment = Alignment.Center) {
         if (state == null) return@Box
+        if (io.embodit.dronesight.ui.window.WindowCtl.levelHint) {
+            // q4-3 / D9: the main window waits for a level head; not a key, nothing to press
+            Column(Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)).background(DsColors.TagBg).padding(horizontal = 16.dp, vertical = 6.dp).probe("look_level"), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Text(text = rs(R.string.look_level), style = DsType.title.copy(fontSize = 26.sp, lineHeight = 32.sp), color = DsColors.TagInk, maxLines = 1, onTextLayout = fits("chip/look_level"))
+                Text(text = rs(R.string.look_level_2), style = DsType.body, color = DsColors.TagInk, maxLines = 1, onTextLayout = fits("chip/look_level_2"))
+            }
+            return@Box
+        }
         Key(rs(R.string.open_panel), "open_panel", R.drawable.ic_open_with, KeyKind.PRIMARY, 56.dp) { io.embodit.dronesight.ui.window.WindowCtl.reopen("chip") }
     }
 }
@@ -801,13 +809,23 @@ private fun InvSwitch(label: String, on: Boolean, name: String, onChange: (Boole
 
 // ================================================================================================= S12 exit confirm
 
+// QA #4 q4-1: the confirmation sat on a dark slate card while 取消 kept the glass colours (labelPrimary ink) -> 1.30:1.
+// Now it is on the window glass like every other settings row, and 取消 is a plain system Button (factory template:
+// default colours, a tertiary fill disappears on the glass).
 @Composable
 private fun ExitConfirm(onEvent: (Ui) -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(DsColors.TagBg).padding(16.dp).probe("exit_confirm"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = rs(R.string.exit_title), style = DsType.title, color = DsColors.TagInk, maxLines = 2, onTextLayout = fits("exit/title"))
-        Text(text = rs(R.string.exit_body), style = DsType.body, color = DsColors.TagInk, maxLines = 1, onTextLayout = fits("exit/body"))
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).probe("exit_confirm"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(text = rs(R.string.exit_title), style = DsType.title, color = PicoTheme.colorScheme.labelPrimary, maxLines = 2, onTextLayout = fits("exit/title"))
+        Text(text = rs(R.string.exit_body), style = DsType.body, color = PicoTheme.colorScheme.labelPrimary, maxLines = 1, onTextLayout = fits("exit/body"))
         Row(Modifier.fillMaxWidth().height(56.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Key(rs(R.string.cancel), "quit_cancel", null, KeyKind.NORMAL, 56.dp, Modifier.weight(1f)) { onEvent(Ui.QuitCancel) }
+            Button(
+                onClick = { onEvent(Ui.QuitCancel) },
+                modifier = Modifier.weight(1f).probe("quit_cancel").height(56.dp),
+                size = ButtonDefaults.Regular.copy(height = 56.dp),
+                shape = CircleShape,
+            ) {
+                Text(text = rs(R.string.cancel), maxLines = 1, style = DsType.button, onTextLayout = fits("key/quit_cancel"))
+            }
             Key(rs(R.string.exit_yes), "quit_yes", R.drawable.ic_logout, KeyKind.DANGER, 56.dp, Modifier.weight(1f)) { onEvent(Ui.QuitYes) }
         }
     }

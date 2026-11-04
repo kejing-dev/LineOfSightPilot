@@ -9,6 +9,7 @@ import io.embodit.dronesight.domain.Quat4
 import io.embodit.dronesight.domain.Vec3
 import io.embodit.dronesight.domain.Yaw
 import io.embodit.dronesight.platform.DsLog
+import io.embodit.dronesight.ui.Lang
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.atan2
@@ -54,8 +55,9 @@ internal class DroneView(private val courseRoot: Entity, private val kit: Course
     // direction hints: "right stick ->" and "right stick ^" in the world (shaft + two head bars + label each)
     private val hintRight = List(3) { Bar(model(kit.cube, kit.yellowSolid, "hintR$it", floor)) }
     private val hintUp = List(3) { Bar(model(kit.cube, kit.yellowSolid, "hintU$it", floor)) }
-    private val hintRightLabel: ModelEntity = model(kit.label, kit.labelMats["dirRight"] ?: kit.white, "hintRLabel", courseRoot)
-    private val hintUpLabel: ModelEntity = model(kit.label, kit.labelMats["dirUp"] ?: kit.white, "hintULabel", courseRoot)
+    private val hintRightLabel: ModelEntity = model(kit.label, kit.labelMats["dirRight.ZH"] ?: kit.white, "hintRLabel", courseRoot)
+    private val hintUpLabel: ModelEntity = model(kit.label, kit.labelMats["dirUp.ZH"] ?: kit.white, "hintULabel", courseRoot)
+    private var hintLang: Lang = Lang.ZH
     // landing offset line (S07)
     private val offsetLine = Bar(model(kit.cube, kit.white, "offsetLine", courseRoot)).also { it.e.enabled = false }
 
@@ -207,7 +209,14 @@ internal class DroneView(private val courseRoot: Entity, private val kit: Course
      * Direction hints (rules.noseIndication): where "right stick ->" and "right stick ^" take the drone in the world,
      * drawn on the floor next to the shadow. Labels billboard towards [headLocal].
      */
-    fun hints(on: Boolean, pos: Vec3, yaw: Float, headLocal: Vec3) {
+    fun hints(on: Boolean, pos: Vec3, yaw: Float, headLocal: Vec3, lang: Lang) {
+        if (lang != hintLang) {
+            // the language store changed (settings / debug `lang`): swap to the label baked in that language
+            hintLang = lang
+            kit.labelMats["dirRight.${lang.name}"]?.let { hintRightLabel.setMaterial(it) }
+            kit.labelMats["dirUp.${lang.name}"]?.let { hintUpLabel.setMaterial(it) }
+            DsLog.i("HINT labels lang=$lang")
+        }
         if (!on && hintsOff) return
         hintsOff = !on
         for (b in hintRight + hintUp) b.e.enabled = on

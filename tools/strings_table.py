@@ -63,6 +63,9 @@ S = [
     ("tab_fly", "飞行", "Fly"),
     ("tab_lessons", "科目", "Lessons"),
     ("open_panel", "打开面板", "Open panel"),
+    # q4-3: the main window waits for a level head (D9); shown on the Stage meanwhile
+    ("look_level", "平视前方", "Look straight ahead"),
+    ("look_level_2", "面板就出来", "and the panel opens"),
     ("done_btn", "好了", "Done"),
     ("mute", "静音", "Mute"),
     ("vsticks", "虚拟摇杆", "Stick pads"),
@@ -207,7 +210,7 @@ S = [
     ("reset_yes", "清掉", "Clear"),
     ("cancel", "取消", "Cancel"),
     ("about", "关于", "About"),
-    ("about_1", "v0.1.1 · 科目名对照 CAAC 多旋翼视距内实践考试，场地按客厅缩放", "v0.1.1 · Lesson names follow the CAAC multirotor VLOS test, scaled to a living room"),
+    ("about_1", "v0.1.3 · 科目名对照 CAAC 多旋翼视距内实践考试，场地按客厅缩放", "v0.1.3 · Lesson names follow the CAAC multirotor VLOS test, scaled to a living room"),
     ("about_2", "练手感用的，不是培训课时，不能替代报名考试", "For practice only. Not training hours, not a substitute for the real test"),
     ("quit", "退出应用", "Quit app"),
     # S12

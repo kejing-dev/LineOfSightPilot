@@ -1,5 +1,6 @@
 package io.embodit.dronesight.ui.scene
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -48,7 +49,9 @@ import io.embodit.dronesight.platform.tracking.HeadTracker
 import io.embodit.dronesight.ui.DsController
 import io.embodit.dronesight.ui.DsUiState
 import io.embodit.dronesight.ui.FlightSnap
+import io.embodit.dronesight.R
 import io.embodit.dronesight.ui.Lang
+import io.embodit.dronesight.ui.components.localizedResources
 import io.embodit.dronesight.ui.Screen
 import io.embodit.dronesight.ui.Ui
 import io.embodit.dronesight.ui.components.PanelSizes
@@ -112,6 +115,14 @@ class DroneScene {
     private var courseRoot: Entity? = null
     private var rig: PanelRig? = null
     private var shared: SharedResources? = null
+    private var appContext: Context? = null
+
+    /** The language the Stage's baked labels show: the same store as the panels (自动 = the system locale). */
+    private fun labelLang(lang: Lang): Lang =
+        when (lang) {
+            Lang.SYSTEM -> if (appContext?.resources?.configuration?.locales?.get(0)?.language == "zh") Lang.ZH else Lang.EN
+            else -> lang
+        }
     private var kit: CourseKit? = null
     private var course: CourseView? = null
     private var drone: DroneView? = null
@@ -149,6 +160,7 @@ class DroneScene {
     private var panelPose: Upright? = null
     private var windowEpoch = -1
     private var chipPose: Upright? = null
+    private var levelHintShown = false
 
     // flight
     private var session: Session? = null
@@ -195,8 +207,9 @@ class DroneScene {
 
     // =========================================================================================== lifecycle
 
-    fun attach(content: SpatialViewContent, attachments: SpatialViewAttachments) {
+    fun attach(content: SpatialViewContent, attachments: SpatialViewAttachments, context: Context) {
         if (attached || stageRoot != null) detach()
+        appContext = context.applicationContext
         startMs = SystemClock.elapsedRealtime()
         this.content = content
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -216,7 +229,7 @@ class DroneScene {
         val rig = PanelRig(root) { id, shown -> panelShown[id] = shown }
         this.rig = rig
         rig.world(PanelIds.TAG, PanelSizes.TAG_W, PanelSizes.TAG_H, PanelSizes.SCALE).maxPitch = 0f
-        rig.world(PanelIds.OPEN, PanelSizes.OPEN_W, PanelSizes.OPEN_H, PanelSizes.SCALE).maxPitch = 0.45f
+        rig.world(PanelIds.OPEN, PanelSizes.OPEN_W, PanelSizes.OPEN_H, PanelSizes.SCALE).maxPitch = CHIP_MAX_PITCH
         head.start()
         controllers.start()
         ActiveScene.current = this
@@ -303,9 +316,14 @@ class DroneScene {
         }
         for (i in 1..4) label("gate$i", "$i")
         for ((i, s) in listOf("0°", "90°", "180°", "270°").withIndex()) label("spin$i", s)
-        val zh = DsController.state.value.prefs.lang == Lang.ZH || (DsController.state.value.prefs.lang == Lang.SYSTEM && Locale.getDefault().language == "zh")
-        label("dirRight", if (zh) "右杆→" else "R stick →")
-        label("dirUp", if (zh) "右杆↑" else "R stick ↑")
+        // D26: both languages baked up front from the app's own strings, so a language switch only swaps materials
+        // (QA #4 q4-2: the labels were baked once in the language of the moment and stayed English after 中)
+        val ctx = appContext
+        if (ctx != null) for (lang in listOf(Lang.ZH, Lang.EN)) {
+            val res = localizedResources(ctx, lang)
+            label("dirRight.${lang.name}", res.getString(R.string.dir_right))
+            label("dirUp.${lang.name}", res.getString(R.string.dir_up))
+        }
         label("ftest", "F↑")
         return CourseKit(
             cube = sh.keep(Shapes.cube("cube")),
@@ -425,6 +443,9 @@ class DroneScene {
         val rig = rig ?: return
         rig.onFrame(now)
         rig.stowBehind(pose)
+        // D9: the main window opens only while the head is level (q4-3); the real head, not the debug `view` turn
+        WindowCtl.stepGate(now, if (hasHead) Math.toDegrees(pose.pitch.toDouble()).toFloat() else null)
+        placeLevelHint()
         if (!attached || paused) return
         val ui = DsController.state.value
         try {
@@ -716,7 +737,7 @@ class DroneScene {
         val yaw = fl?.yaw ?: 0f
         dv.pose(pos, yaw, fl?.pitchVis ?: 0f, fl?.rollVis ?: 0f, if (ui.screen == Screen.PAUSED) 0.3f else fl?.rotor ?: 0f, dt, lift, flip)
         dv.heightLine(pos, ui.prefs.altLine && (fl?.airborne == true))
-        dv.hints(ui.directionHints && ui.isFlight && fl?.airborne == true, pos, yaw, headLocal)
+        dv.hints(ui.directionHints && ui.isFlight && fl?.airborne == true, pos, yaw, headLocal, labelLang(ui.prefs.lang))
         dv.offset(ui.screen == Screen.LANDING || ui.screen == Screen.RESULT, landingAt)
         // see-through: next to your head (D14) or in front of the panel (D20)
         val stagePos = f.toStage(pos + Vec3(0f, 0.1f, 0f))
@@ -819,6 +840,26 @@ class DroneScene {
         DsLog.i(String.format(Locale.US, "WINDOW estimate why=%s at=%s yaw=%.1f head=%s headYaw=%.1f pitch=%.1f size=%.2fx%.2f m", why, DsLog.pos(up.position), Math.toDegrees(up.yaw.toDouble()), DsLog.pos(pose.position), Math.toDegrees(pose.yaw(0f).toDouble()), Math.toDegrees(pose.pitch.toDouble()), PanelSizes.WINDOW_W * WindowCtl.dpM, PanelSizes.WINDOW_H * WindowCtl.dpM))
     }
 
+    /**
+     * "平视前方" while the window waits for a level head (q4-3): on the line of sight so it is seen whatever the pitch,
+     * upright (yaw only, D9), re-posed every frame; the same Stage slot as the chip (one or the other). Runs from the
+     * first frame, before the course is built (the emulator takes ~20 s to build).
+     */
+    private fun placeLevelHint() {
+        val rig = rig ?: return
+        if (WindowCtl.levelHint && hasHead) {
+            chipPose = null
+            val h = Placement.levelHint(pose)
+            if (!levelHintShown) DsLog.i("LEVEL hint show at=${DsLog.pos(h.position)} pitch=${"%.1f".format(Math.toDegrees(pose.pitch.toDouble()))}")
+            levelHintShown = true
+            rig[PanelIds.OPEN]?.apply { facePoint = null; maxPitch = 0f }
+            showAt(PanelIds.OPEN, h.position)
+        } else if (levelHintShown) {
+            levelHintShown = false
+            rig[PanelIds.OPEN]?.apply { hide(); maxPitch = CHIP_MAX_PITCH }
+        }
+    }
+
     private fun placePanels(ui: DsUiState, now: Long) {
         val rig = rig ?: return
         if (WindowCtl.createdEpoch != windowEpoch && hasHead) {
@@ -830,7 +871,9 @@ class DroneScene {
             }
         }
         // "打开面板" while the window is closed or minimised: posed once from the head when it appears (D9), upright
-        if (WindowCtl.chipWanted(now) && ui.screen != Screen.STARTING) {
+        if (WindowCtl.levelHint) {
+            // the hint holds the slot
+        } else if (WindowCtl.chipWanted(now) && ui.screen != Screen.STARTING) {
             val c = chipPose ?: Placement.openChip(placePose).also {
                 chipPose = it
                 DsLog.i("CHIP show at=${DsLog.pos(it.position)} window=${WindowCtl.panelState}")
@@ -1032,6 +1075,8 @@ class DroneScene {
         private const val MAX_DT = 0.1f
         private const val SUN_LUX = 6000f
         private const val HEAD_WAIT_MS = 6000L
+        /** "打开面板" tips back to the head up to 26°; the "平视前方" hint in the same slot stays upright (0). */
+        private const val CHIP_MAX_PITCH = 0.45f
         private const val BLOCK_AFTER_MS = 2000L
         private const val MODEL_WAIT_MS = 8000L
         private const val FLOOR_TIMEOUT_MS = 5000L

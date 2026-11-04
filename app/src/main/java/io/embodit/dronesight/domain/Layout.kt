@@ -119,6 +119,15 @@ object Placement {
 
     /** The "open panel" chip on the Stage when the window is closed: 20° right, 0.9 m, 25° down (beside the course). */
     fun openChip(head: HeadPose): Upright = placeUpright(head, -20f, 0.9f, 25f)
+
+    /**
+     * "平视前方" while the main window waits for a level head (q4-3): straight ahead on the line of sight (the head's
+     * own pitch, clamped to ±40°) so it is in view looking down or up, 0.75 m; still upright, yaw only (D9).
+     */
+    fun levelHint(head: HeadPose): Upright {
+        val pitchDeg = Math.toDegrees(head.pitch.toDouble()).toFloat().coerceIn(-40f, 40f)
+        return placeUpright(head, 0f, 0.75f, -pitchDeg)
+    }
 }
 
 /** Panel facing helper: the yaw (Yaw convention) of a panel at [panel] whose face (+Z) turns to [viewer]. */
