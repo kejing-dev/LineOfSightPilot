@@ -4,13 +4,8 @@
 
 | 会话 | 标题 | 行数 |
 |---|---|---|
-| `5cd4b613` | 子代理 · Spatial app factory | 56 |
-| `5cd4b613` | 子代理 · Spatial app factory | 84 |
-| `5cd4b613` | 子代理 · Spatial app factory | 286 |
-| `5cd4b613` | 子代理 · Spatial app factory | 329 |
-| `5cd4b613` | 子代理 · Spatial app factory | 2182 |
-| `5cd4b613` | 子代理 · Spatial app factory | 909 |
-| `5cd4b613` | 子代理 · Spatial app factory | 1346 |
-| `5cd4b613` | 子代理 · Spatial app factory | 1074 |
-| `5cd4b613` | 子代理 · Spatial app factory | 1231 |
-| `5cd4b613` | 子代理 · Spatial app factory | 530 |
+| `c5f36a81` | 视距飞手 研发站 #2：原生窗口 + TabBar、螺旋桨声、双语、退出 v0.1.2 | 986 |
+| `2e753dff` | 视距飞手 QA 站 #4：v0.1.2 原生窗口 + TabBar、螺旋桨声、双语、退出 | 1080 |
+| `605d4063` | 视距飞手 研发站 #3：QA #4 三条 + 窗口启动俯仰绕法 v0.1.3 | 1001 |
+| `1f9a9a75` | 视距飞手 QA 站 #5：v0.1.3 平视开窗 + 双语 + 螺旋桨声 | 1222 |
+| `cd3a5b64` | 视线飞手 发布站 #1：v0.1.3 Vibe Lab 素材 + Release | 856 |
