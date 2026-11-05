@@ -1,6 +1,6 @@
 # Line-of-Sight Pilot 视距飞手
 
-> **v0.1.1 · Pre-release · passed emulator QA, not yet verified on a headset**（预发布 · 模拟器 QA 通过，真机未验证）
+> **v0.1.3 · Release · emulator QA passed, accepted on a PICO headset**（正式版 · 模拟器 QA 通过，用户头显验收放行）
 
 ![Line-of-Sight Pilot 视距飞手](docs/cover.jpg)
 
@@ -15,67 +15,73 @@
 A life-size quadcopter (450 mm wheelbase) takes off from a pad on your real living-room floor. The two PICO controller thumbsticks are a Mode 2 transmitter: left stick = throttle and yaw, right stick = pitch and roll. Practise the multirotor visual-line-of-sight test items in exam order. The drone is real size in your real room, so you judge distance and height with your own eyes, and when the nose points at you, pushing right sends it to *your* left. That flip is the thing to practise. A PICO OS 6 passthrough (Mixed Stage) app built with the PICO Spatial SDK.
 
 - **7 lessons** named and ordered after the CAAC multirotor VLOS practical test: Takeoff · tail-in hover, Nose-in hover, Slow 360, Figure eight (4 gates around two poles), Spot landing, Full run (all of it without landing), ATTI hover (attitude mode with a light breeze)
-- **Free flight** and an endless **Waypoint run**: procedurally generated hoops (3–6 per round). Every hoop stays at least 1.5 m from your head and out of the panel's direction, and the set is redrawn if you move the panel
+- **Free flight** and an endless **Waypoint run**: procedurally generated hoops (3–6 per round), kept at least 1.5 m from your head and out of the panel's direction
 - **GPS / ATTI** modes (GPS stops when you let go, ATTI keeps drifting), wind off / light / gusty, lenient or standard judging
-- The floor shadow, nose arrow and height tag show where the nose points and how high the drone is. Direction hints ("R stick →") are on for the first two lessons
-- **No controllers?** Two virtual stick pads under the panel work with pinch-and-drag
-- One control panel on your left (drag it, or call it back in Settings), Chinese / English, sound with mute, offline, no account, no permissions
+- The floor shadow, nose arrow and height tag show where the nose points and how high the drone is. Direction hints on the floor ("R stick →") are on for the first two lessons
+- **No controllers?** Two virtual stick pads in the panel work with pinch-and-drag
+- One system window with a TabBar (Fly / Lessons / Settings) that you can drag; close it and a small "Open panel" button stays in the room
+- Rotor sound synthesised live: four rotors with their own harmonics, pitch follows the throttle and drifts a little, no hiss
+- Chinese / English / follow system, switched on the first row of Settings and applied at once (the 3D stick labels too); Quit app at the bottom of Settings; offline, no account, no permissions
 
 **This is for stick feel only. It does not count as training hours and does not replace a licensed course or the exam.** Lesson names follow the CAAC test items; the course is scaled to a living room, not exam size.
+
+### What's new in v0.1.3 (since v0.1.1)
+
+From the user's headset feedback on v0.1.1 ("same UI problem; the rotor sound is a bit monotonous, add random pitch and make it more harmonious; add bilingual and a quit button; use the native TabBar"):
+
+- The three attached panels (control panel, stick pads, blocking dialog) and the home-made drag bar are replaced by **one system window + native TabBar**. Drag it by the system handle; × leaves an "Open panel" button; Settings can call it back in front of you.
+- **Rotor sound** is now synthesised in real time instead of a 1 s loop: per-rotor harmonics, pitch 170–290 Hz with throttle, slow random drift (±2.5 %), slight detune between rotors, distance roll-off.
+- **Language** is the first row of Settings: Auto / 中 / EN, applied immediately. The 3D stick labels on the floor follow the switch mid-flight (QA #4 q4-2).
+- **Quit app** is at the bottom of Settings with an in-place confirm; "Cancel" now reads at 10 : 1 (QA #4 q4-1).
+- **The window opens only when your head is level** (within ±10°). Looking down or up, you see "Look straight ahead" first; the platform otherwise opens the window tilted with your head (QA #4 q4-3).
 
 ### Screenshots (emulator, Chinese UI)
 
 | | |
 |---|---|
-| ![Tail-in hover](docs/01-tail-in-hover.jpg) Tail-in hover: fly into the green box and hold for 20 s; arrows on the floor show which way to push | ![Nose-in hover](docs/02-nose-in-hover.jpg) Nose-in hover: the nose points at you, so left and right flip |
-| ![Slow 360](docs/03-slow-360.jpg) Slow 360: turn a full circle inside the box; the ring on the pad counts the degrees | ![Figure eight](docs/04-figure-eight.jpg) Figure eight: fly the painted line around both poles through 4 numbered gates |
-| ![Waypoint run](docs/05-waypoint-run.jpg) Waypoint run: generated hoops in the course, kept away from your head and the panel | ![Lessons](docs/06-lessons.jpg) Lessons: 7 test items in exam order, plus free flight and the waypoint run |
+| ![Figure eight](docs/01-figure-eight.jpg) Figure eight: fly the painted line around both poles through 4 numbered gates (gate 2 of 4) | ![Nose-in hover](docs/02-nose-in-hover.jpg) Nose-in hover: the nose points at you, so the floor labels show "R stick →" and "R stick ↑" |
+| ![Slow 360](docs/03-slow-360.jpg) Slow 360: turn inside the box; the ring on the pad fills green with the degrees turned | ![Result](docs/04-result.jpg) Result: passed, with retry, next lesson and back to lessons |
+| ![Lessons](docs/05-lessons.jpg) Lessons tab: 7 test items in exam order, plus free flight and the waypoint run | ![Settings](docs/06-settings.jpg) Settings tab: language first, then volume, default mode, wind, judging, pole distance, hover height |
+| ![Welcome](docs/07-welcome.jpg) Welcome: no controller found, so fly with the stick pads | |
 
-Screenshots come from the PICO emulator, with states reached by debug broadcasts and cropped to 16:9. The emulator camera cannot turn, so the panel (which sits 38° to your left by default) was brought in front of the camera for these shots. The release also carries a demo video (`LineOfSightPilot-demo.mp4`, 60 s, English UI). It is a native emulator run **driven by debug input, not a recording of real hands or controllers**, has no sound, and plays at about 1 frame per second, so the flight looks jumpy.
+Screenshots were taken on the PICO emulator (v0.1.3, Chinese UI), with states reached by debug broadcasts; the emulator view is square, so each shot is centred on a 16:9 blurred background. The release also has a demo video (`video-01.mp4`, 80 s, Chinese UI): a native emulator run **driven by debug input, not a recording of real hands or controllers**, no sound, and the emulator draws about 1 frame per second, so the flight looks jumpy.
 
 ### Install
 
 ```bash
-adb install -r LineOfSightPilot-v0.1.1.apk
+adb install -r LineOfSightPilot-v0.1.3.apk
 pico-cli app launch io.embodit.dronesight
 ```
 
-Get the APK from [Release v0.1.1](https://github.com/kejing-dev/LineOfSightPilot/releases/tag/v0.1.1). Requires PICO OS 6 (Spatial SDK 6.1.9, minSdk 35). The APK is a debug build (versionCode 2).
+Get the APK from [Release v0.1.3](https://github.com/kejing-dev/LineOfSightPilot/releases/tag/v0.1.3). Requires PICO OS 6 (Spatial SDK 6.1.9, minSdk 35). The APK is a debug build (versionCode 4), the same file that is installed on the test headset. A build from another machine is signed differently: `adb uninstall io.embodit.dronesight` first (progress resets).
 
-### Not yet verified on a headset
+### Verification
 
-Emulator QA round 3 passed all three gates: no Material components; install, launch and 60 s with no crash or ANR; all 17 design states checked in Chinese and English, 108 screenshots. Both round-2 blockers are fixed: lesson titles were cut off with "…" when the timer chip grew, and waypoint hoops were generated from a default head pose and could land in front of the panel. No headset was connected when this was published, so a person still needs to check on a real PICO:
-
-1. Install v0.1.1 and cold-start 3 times. Within 2 s the panel should be at 38° left and the course ahead. Also start once looking down 30° and once looking up 30°: the panel should be upright and facing you.
-2. Mode 2 sticks: left = throttle + yaw, right = pitch + roll, with the right signs on every axis. Holding the left stick up for 1 s takes off; A / X pauses. Check the dead zone and expo feel.
-3. Press every panel button with the controller ray and with eye + pinch. In S03, place the course with the ray and confirm with the trigger; the course should then lock. Pinch-drag the virtual stick pads and check they follow your hand.
-4. Waypoint run: stand at different spots and turn the course to an angle before starting F2. No hoop should land in the panel's direction or right in your face, and hoops should be rearranged when the panel is dragged before take-off.
-5. Judging distance at 1:1: the 0.45 m quad is easy to see 3 m away, **both lines of the height tag can be read at 3 m**, and the shadow shows on a dark carpet.
-6. In nose-in hover the direction hint points to your left. Fly L1, L2 and L5 sloppily 3 times each with real controllers; they should still pass.
-7. Turn 90° and 180°, then use "call the panel back": it appears in your new straight-ahead direction. A dragged panel stays where you let go.
-8. Sound: 3 minutes of flying with sound on is not annoying; the mute switch is easy to find and is remembered; rotor sound is loud enough at 1–3 m.
-9. Settings → Quit app → Quit: the app leaves recents and reopens clean. **The text on the danger keys and on "Cancel" is easy to read.**
+- Emulator QA round 5 passed: the three QA #4 blockers are fixed, regression on the system window, TabBar, quit, lessons L1 / L3 / L4 / L5 and text fit (0 overflows in both languages) passed. The rotor sound was recorded in flight: pitch follows the throttle 207–292 Hz, no energy above 2 kHz, no clicks or loop seam.
+- The user tried v0.1.3 on a PICO headset and released it (2026-11-05).
+- Not measured: the hardware Mode 2 sticks on the emulator (no controller provider there), and how the ±10° level gate feels when you wear the headset.
 
 ### Known issues (non-blocking)
 
-1. The grey "Cancel" key in the quit dialog measured 4.44–4.49 : 1 on emulator screenshots, just under 4.5 : 1 (this method reads small text low; the same key measured 5.35 : 1 last round). Check it on the headset.
-2. The height tag sits over the drone 3 m away. In emulator screenshots its second line (tail-in / nose-in / side) is only about 6 px tall, too small to read. The text-fit log shows it is not clipped; readability needs a headset.
-3. By default the control panel is 38° to your left (decided at design gate B). Check on a headset that turning your head to it is comfortable.
-4. The short states S00 (getting ready, under 2 s), S07 (landing check, 1.2 s) and S09 (hard landing, 2.0 s) only have log evidence, no screenshots: the emulator draws about 1 frame per second. The state changes and result cards are correct in the logs.
-5. The demo video is recorded at about 1 fps on the emulator, so the flight looks jumpy. It is also in English.
-6. Debug tools only (does not affect users): `fly hover` leaves the drone side-on once the course has been turned, and `tools/pad_lesson.sh` times out at slow speed on this emulator.
+1. When the window opens near the edge of the level gate (±7–10°) it sits a little low and tilted. With the default course, the drone in L2 hover can be half behind the window's right edge; drag the window aside.
+2. The window position is an estimate from the moment it opened. The app cannot read where you drag it, so waypoint avoidance and "drone behind the panel" fading use the first position. The left pole of the figure eight and some waypoints can end up behind the window: drag it aside.
+3. The subtitle on the "Look straight ahead" hint is small (about 0.55°).
+4. The rotor sound changes with throttle only; yaw, roll and pitch do not change it.
+5. The last sample of the `ding` cue is not zero, so its tail is cut very slightly.
+6. The TabBar shows icons only until you look at it (system behaviour).
+7. Emulator only: the first frame of the window can show a black band; it recovers on the next redraw.
 
 ### Development
 
-Kotlin · PICO Spatial SDK 6.1.9 · Mixed Stage (`STAGE_MIXED`, passthrough) with one control panel, optional virtual stick pads, a height tag over the drone and a blocking dialog. See [AGENTS.md](AGENTS.md) for structure, debug broadcasts, the text-fit gate and the QA hooks. Flight model, judging, waypoints and layout are plain Kotlin with JVM tests (`tools/dev.sh test`, 52 tests).
+Kotlin · PICO Spatial SDK 6.1.9 · Mixed Stage (`STAGE_MIXED`, passthrough) with one Planar system window (540 × 680 dp) and a TabBar, a height tag over the drone and an "Open panel" button. See [AGENTS.md](AGENTS.md) for structure, debug broadcasts, the text-fit gate and the QA hooks. Flight model, judging, waypoints, rotor synth and layout are plain Kotlin with JVM tests (`tools/dev.sh test`).
 
 ### Credits
 
-- Quadcopter: built by the developer in Blender with a procedural `bpy` script (a white 450-class trainer with red front / green rear LEDs). No third-party model or licence involved.
-- Course, pad, poles, gates, shadow and arrows are built in code; rotor and cue sounds are synthesised in code (`tools/render_audio.py`).
+- Quadcopter: built by the developer in Blender with a procedural `bpy` script (a white 450-class trainer with red front / green rear LEDs). No third-party model.
+- Course, pad, poles, gates, shadow and arrows are built in code; rotor sound is synthesised at run time and cue sounds by `tools/render_audio.py`.
 - Fonts: Noto Sans / Noto Sans SC subset, SIL OFL 1.1 (`third_party/`).
 - Icons: Material Symbols (UI glyphs), Apache-2.0.
-- Reference apps, with thanks: [Spatial Chopper Toy](https://github.com/EE-LiuYunhao/SpatialChopperToy) by EE-LiuYunhao (Mixed Stage set-up and the velocity / drag flight-solver idea, simplified here; that repository has no licence file, so confirm before making this repository public); and the developer's own Furniture Fit (controller thumbstick reading), Spatial Ruler (floor tracking, head tracker, panel pool, fonts) and Figure Model (fixed draggable panel with call-back, floor shadow, debug receiver). Panel pool, theme and debug receiver were ported from Dog Manners, from the same factory.
+- Reference apps, with thanks: [Spatial Chopper Toy](https://github.com/EE-LiuYunhao/SpatialChopperToy) by EE-LiuYunhao (Mixed Stage set-up and the velocity / drag flight-solver idea, simplified here; that repository has no licence file); and the developer's own Furniture Fit (controller thumbstick reading), Spatial Ruler (floor tracking, head tracker, fonts) and Figure Model (floor shadow, debug receiver). Theme and debug receiver were ported from Dog Manners, from the same factory.
 
 ---
 
@@ -84,67 +90,73 @@ Kotlin · PICO Spatial SDK 6.1.9 · Mixed Stage (`STAGE_MIXED`, passthrough) wit
 一架真实大小的四轴（轴距 450 mm）停在你客厅真实地板上的起降垫上。两只 PICO 手柄的摇杆就是 Mode 2 遥控器：左杆管油门和机头，右杆管前后左右。按执照考试的顺序练视距科目。飞机是真尺寸、在真房间里飞，远近高低靠你自己的眼睛判断。机头朝你的时候，右杆往右，飞机往**你的**左边走，这一下就是要练的。PICO OS 6 透视应用（Mixed Stage），PICO Spatial SDK 开发。
 
 - **7 课**，名字和顺序对照 CAAC 多旋翼视距内驾驶员实践考试：起飞 · 对尾悬停、对头悬停、自旋一圈、水平 8 字（绕两根桩穿 4 道门）、定点降落、全套串联（中间不落地）、姿态模式悬停（姿态模式 + 微风）
-- **自由飞**和不限轮次的**航点挑战**：程序生成的悬空圆门，每轮 3–6 个。每个门离你的头至少 1.5 米、不进面板方向；挪了面板会重新生成
+- **自由飞**和不限轮次的**航点挑战**：程序生成的悬空圆门，每轮 3–6 个，离你的头至少 1.5 米、不进面板方向
 - **GPS / 姿态**两档（GPS 松杆就停，姿态松杆会飘），风分无 / 微风 / 阵风，判定分宽松 / 标准
-- 地上的影子、机头箭头和高度牌告诉你机头朝哪、飞多高；前两课默认开方向提示（「右杆 →」）
-- **没手柄**：面板下方两块虚拟摇杆垫，捏住拖也能飞
-- 一块控制面板在你左手边（可拖，设置里可叫回），中英双语，声音可静音，不联网，不需要账号，不申请权限
+- 地上的影子、机头箭头和高度牌告诉你机头朝哪、飞多高；前两课地上有方向提示（「右杆 →」）
+- **没手柄**：面板里两块虚拟摇杆垫，捏住拖也能飞
+- 一个系统窗口 + 标签栏（飞行 / 科目 / 设置），可拖；点 × 关掉后房间里留一个「打开面板」小按钮
+- 螺旋桨声实时合成：四个桨各有谐波，音高跟油门、带一点随机漂移，没有嘶声
+- 设置第一行切语言：自动 / 中 / EN，立即生效（地上的 3D 摇杆牌也跟着换）；设置最底「退出应用」；不联网，不需要账号，不申请权限
 
 **这是练手感用的，不算培训学时，不能替代正规培训和考试。**科目名称对照 CAAC 考试科目，场地按客厅缩放，不是考场尺寸。
+
+### v0.1.3 改了什么（相对 v0.1.1）
+
+来自用户在头显上试 v0.1.1 的反馈（「也是那个 UI 问题，然后飞机的螺旋桨声音现在有点单调噪音，可以加点随机 pitch 等，也再和谐一点，另外加个双语和退出按钮；用原生 tab bar 组件」）：
+
+- 三块附着面板（控制面板、摇杆垫、拦截对话框）和自制拖动条，换成**一个系统窗口 + 原生标签栏**。用系统把手拖动；× 关掉后留「打开面板」；设置里可以把它叫回到你正前方。
+- **螺旋桨声**从 1 秒循环改成实时合成：每个桨自己的谐波，音高随油门 170–290 Hz，缓慢随机漂移（±2.5 %），四个桨略微失谐，距离越远越轻。
+- **语言**在设置第一行：自动 / 中 / EN，切了立即生效；飞行中切语言，地上的 3D 摇杆牌当场变（QA #4 q4-2）。
+- **退出应用**在设置最底，同一页展开确认；「取消」对比度 10 : 1（QA #4 q4-1）。
+- **只在你平视时打开窗口**（±10° 内）。低头或抬头时先看到「平视前方」提示，放平后窗口才出来，否则系统会把窗口跟着头俯着 / 仰着打开（QA #4 q4-3）。
 
 ### 截图（模拟器，中文界面）
 
 见上方截图表：
 
-1. 对尾悬停：飞进绿框悬停 20 秒，地上的箭头提示往哪推杆
-2. 对头悬停：机头对着你，左右反过来
-3. 自旋一圈：在框里原地转满一圈，垫子上的刻度环记角度
-4. 水平 8 字：沿地上的 8 字线绕两根桩，依次穿过 4 道门
-5. 航点挑战：程序生成的悬空圆门，离你的头和面板都远
-6. 选科：7 课按执照考试科目顺序，外加自由飞和航点挑战
+1. 水平 8 字：沿地上的 8 字线绕两根桩，依次穿过 4 道门（第 2 / 4 门）
+2. 对头悬停：机头对着你，地上的牌子提示「右杆 →」「右杆 ↑」
+3. 自旋一圈：在框里原地转，垫子上的刻度环按转过的角度变绿
+4. 结果：过了，可以重飞、下一科或回选科
+5. 科目页：7 课按执照考试科目顺序，外加自由飞和航点挑战
+6. 设置页：语言在第一行，下面是音量、默认模式、风、判定、桩距、悬停高
+7. 欢迎页：没检测到手柄，用面板上的两块摇杆垫
 
-截图来自 PICO 模拟器，状态用调试广播定住拍摄，裁成 16:9。模拟器镜头不能转头，所以默认在你左手边 38° 的面板是挪到镜头正前方拍的。Release 里还有一段演示视频（`LineOfSightPilot-demo.mp4`，60 秒，英文界面），是原生模拟器演示，**由调试输入驱动，非真实手势录像**，无声。模拟器约 1 帧 / 秒，所以飞行看起来跳帧。
+截图来自 PICO 模拟器（v0.1.3，中文界面），状态用调试广播定住拍摄；模拟器画面是方的，所以居中放在 16:9 的模糊背景上。Release 里还有一段演示视频（`video-01.mp4`，80 秒，中文界面），是原生模拟器演示，**由调试输入驱动，非真实手势录像**，无声；模拟器约 1 帧 / 秒，所以飞行看起来跳帧。
 
 ### 安装
 
 ```bash
-adb install -r LineOfSightPilot-v0.1.1.apk
+adb install -r LineOfSightPilot-v0.1.3.apk
 pico-cli app launch io.embodit.dronesight
 ```
 
-APK 在 [Release v0.1.1](https://github.com/kejing-dev/LineOfSightPilot/releases/tag/v0.1.1)。需要 PICO OS 6（Spatial SDK 6.1.9，minSdk 35）。APK 是 debug 构建（versionCode 2）。
+APK 在 [Release v0.1.3](https://github.com/kejing-dev/LineOfSightPilot/releases/tag/v0.1.3)。需要 PICO OS 6（Spatial SDK 6.1.9，minSdk 35）。APK 是 debug 构建（versionCode 4），和测试头显上装的是同一个文件。别的电脑构建的签名不同，要先 `adb uninstall io.embodit.dronesight`（进度会清零）。
 
-### 模拟器 QA 通过，真机未验证
+### 验证
 
-模拟器 QA 第 3 轮三道门禁全过：无 Material 组件；装机、启动、60 秒无崩溃 / ANR；设计包 17 个状态中英各核对一遍，共 108 张截图。第 2 轮的两条阻断都修好了：计时 chip 变宽时科目名被省略号截断；航点门按默认头位置生成，可能挡在面板前。发布时头显没连，下面这些要戴上头显人工看：
-
-1. 装 v0.1.1，冷启动 3 次：2 秒内面板在左 38°、场地在前方；再低头 30°、抬头 30° 各启动一次，面板竖直、正对你。
-2. Mode 2 双摇杆：左杆油门 + 航向、右杆俯仰 + 横滚，每个轴方向都对；左杆上推 1 秒起飞；A / X 暂停；死区和 expo 手感。
-3. 手柄射线和眼手捏合各点一遍面板所有按钮；S03 用射线落点摆场地、扳机确认后锁住；虚拟摇杆垫用眼手捏住拖，看是否跟手。
-4. 航点挑战：站在场地不同位置、把场地转一个角度后开 F2，门不进面板方向、穿门时不贴脸；起飞前拖面板后门会重排。
-5. 1:1 判距离：0.45 米轴距的四轴在 3 米外看得清，**高度牌两行在 3 米外都读得出**，影子在深色地毯上看得见。
-6. 对头悬停时方向提示指向你的左侧；L1 / L2 / L5 用真手柄各故意马虎 3 次都能过。
-7. 转身 90° / 180° 后「叫回面板」出现在新的正前方；面板拖动后停在松手处。
-8. 开声音连飞 3 分钟不吵，静音开关一眼可见并记住；1–3 米外旋翼声够响。
-9. 设置 → 退出应用 → 退出：从最近任务消失，再启动干净；**危险键和「取消」的字读得清**。
+- 模拟器 QA 第 5 轮通过：QA #4 的三条阻断都修好；系统窗口、标签栏、退出、L1 / L3 / L4 / L5 科目、中英文字溢出（0 条）回归都过。螺旋桨声实飞录音：音高随油门 207–292 Hz，2 kHz 以上无能量，无爆音、无循环接缝。
+- 用户在 PICO 头显上试了 v0.1.3 并放行（2026-11-05）。
+- 没量到的：模拟器上没有手柄，硬件 Mode 2 双摇杆没在模拟器测；戴着头显时 ±10° 平视门限舒不舒服。
 
 ### 已知问题（不挡用）
 
-1. 退出确认里灰色「取消」键在模拟器截图上量到 4.44–4.49 : 1，略低于 4.5 : 1（这种量法对小字偏低，上一轮同一个键量到 5.35 : 1），请真机复看。
-2. 高度牌在 3 米外的飞机上方，模拟器截图里第二行（对尾 / 对头 / 侧向）只有约 6 像素高，读不出；溢出日志 0 条，字没被裁，能不能读要真机看。
-3. 控制面板默认在左 38°（设计门 B 定的），要真机确认转头看面板舒服。
-4. S00（准备中，不到 2 秒）、S07（着陆判定，1.2 秒）、S09（硬着陆，2.0 秒）只有日志、没有截图：模拟器约 1 帧 / 秒，截不到这么短的过渡。日志里状态切换和结果卡都对。
-5. 演示视频是模拟器约 1 fps 录的，飞行看起来跳帧；视频是英文界面。
-6. 只影响调试工具、不影响用户：场地转过角度后 `fly hover` 让飞机侧对你；`tools/pad_lesson.sh` 在本机慢速时超时。
+1. 窗口在门限边上（±7–10°）打开时会略低、略倾斜；默认场地下飞 L2 悬停，飞机可能一半在窗口右边缘后面，把窗口拖开就好。
+2. 窗口位置是打开那一刻的估计值，应用读不到你拖到哪：航点避让和「飞机挡在面板后变淡」用的是最初的位置。8 字左桩和部分航点可能在窗口后面，需要自己拖开窗口。
+3. 「平视前方」提示的副标题偏小（约 0.55°）。
+4. 螺旋桨声只跟油门变，偏航、横滚、前后推杆时声音不变。
+5. 提示音 `ding` 最后一个采样不是 0，尾巴有极轻的截断。
+6. 标签栏没看它时只显示图标（系统行为）。
+7. 只在模拟器：窗口第一帧可能有一条黑带，下一次重绘恢复。
 
 ### 开发
 
-Kotlin · PICO Spatial SDK 6.1.9 · Mixed Stage（`STAGE_MIXED`，透视），一块控制面板、可开关的虚拟摇杆垫、飞机上方的高度牌和一个无法使用对话框。结构、调试广播、文字溢出门禁、QA 钩子见 [AGENTS.md](AGENTS.md)。飞行模型、判定、航点和摆放是纯 Kotlin，带 JVM 单测（`tools/dev.sh test`，52 个）。
+Kotlin · PICO Spatial SDK 6.1.9 · Mixed Stage（`STAGE_MIXED`，透视），一个 Planar 系统窗口（540 × 680 dp）+ 标签栏、飞机上方的高度牌和「打开面板」按钮。结构、调试广播、文字溢出门禁、QA 钩子见 [AGENTS.md](AGENTS.md)。飞行模型、判定、航点、螺旋桨合成和摆放是纯 Kotlin，带 JVM 单测（`tools/dev.sh test`）。
 
 ### 致谢与许可
 
-- 四轴模型：开发者用 Blender `bpy` 脚本程序化建模（白色 450 级训练机，前红后绿 LED），没有第三方模型、没有外部许可问题。
-- 场地、起降垫、桩、门、影子和箭头由代码生成；旋翼声和提示音由代码合成（`tools/render_audio.py`）。
+- 四轴模型：开发者用 Blender `bpy` 脚本程序化建模（白色 450 级训练机，前红后绿 LED），没有第三方模型。
+- 场地、起降垫、桩、门、影子和箭头由代码生成；螺旋桨声运行时合成，提示音由 `tools/render_audio.py` 合成。
 - 字体：Noto Sans / Noto Sans SC 子集，SIL OFL 1.1（`third_party/`）。
 - 图标：Material Symbols（界面图标），Apache-2.0。
-- 参考应用，致谢：EE-LiuYunhao 的 [Spatial Chopper Toy](https://github.com/EE-LiuYunhao/SpatialChopperToy)（Mixed Stage 启动、速度 + 阻力的飞行解算思路，本应用做了简化；该仓库没有许可文件，本仓库公开前要先确认）；开发者自己的 Furniture Fit（手柄摇杆读取）、Spatial Ruler（地面检测、头部追踪、面板池、字体）、Figure Model（固定可拖面板与叫回、地面影子、调试接收器）。面板池、主题和调试接收器移植自同一条产线的 Dog Manners。
+- 参考应用，致谢：EE-LiuYunhao 的 [Spatial Chopper Toy](https://github.com/EE-LiuYunhao/SpatialChopperToy)（Mixed Stage 启动、速度 + 阻力的飞行解算思路，本应用做了简化；该仓库没有许可文件）；开发者自己的 Furniture Fit（手柄摇杆读取）、Spatial Ruler（地面检测、头部追踪、字体）、Figure Model（地面影子、调试接收器）。主题和调试接收器移植自同一条产线的 Dog Manners。
